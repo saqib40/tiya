@@ -1,0 +1,42 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for the main window",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:default",
+    "dialog:default",
+    "core:path:default",
+    "shell:default",
+    "core:window:default",
+    "core:window:allow-minimize",
+    "core:window:allow-maximize",
+    "core:window:allow-unmaximize",
+    "core:window:allow-close",
+    "core:window:allow-is-maximized",
+    "clipboard-manager:allow-read-text",
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "shell:allow-execute",
+      "scope": [
+        {
+          "name": "pdflatex",
+          "cmd": "pdflatex",
+          "args": [
+            "-interaction=nonstopmode",
+            "-output-directory",
+            {
+              "validator": ".*"
+            },
+            {
+              "validator": ".*"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
