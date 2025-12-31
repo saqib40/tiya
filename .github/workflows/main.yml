@@ -15,8 +15,6 @@ jobs:
         include:
           - platform: macos-latest
             target: aarch64-apple-darwin
-          - platform: macos-13
-            target: x86_64-apple-darwin
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
           - platform: windows-latest
@@ -38,7 +36,7 @@ jobs:
 
       # --- MACOS SETUP ---
       - name: Install dependencies (macOS)
-        if: startsWith(matrix.platform, 'macos')
+        if: matrix.platform == 'macos-latest'
         run: |
           brew install icu4c harfbuzz graphite2 freetype openssl@3 pkg-config fontconfig
           
@@ -50,40 +48,51 @@ jobs:
           SSL_PREFIX=$(brew --prefix openssl@3)
           FC_PREFIX=$(brew --prefix fontconfig)
           
-          # Set comprehensive compiler paths
-          echo "CPATH=$ICU_PREFIX/include:$HB_PREFIX/include/harfbuzz:$GRAPHITE_PREFIX/include:$FT_PREFIX/include/freetype2:$FC_PREFIX/include" >> $GITHUB_ENV
-          echo "LIBRARY_PATH=$ICU_PREFIX/lib:$HB_PREFIX/lib:$GRAPHITE_PREFIX/lib:$FT_PREFIX/lib:$FC_PREFIX/lib" >> $GITHUB_ENV
+          # Build include paths - note harfbuzz headers are directly in include/
+          INCLUDE_PATHS="-I$HB_PREFIX/include -I$ICU_PREFIX/include -I$GRAPHITE_PREFIX/include -I$FT_PREFIX/include/freetype2 -I$FC_PREFIX/include"
+          LIB_PATHS="-L$HB_PREFIX/lib -L$ICU_PREFIX/lib -L$GRAPHITE_PREFIX/lib -L$FT_PREFIX/lib -L$FC_PREFIX/lib"
+          
+          # Set compiler flags that cc-rs will pick up
+          echo "CFLAGS=$INCLUDE_PATHS" >> $GITHUB_ENV
+          echo "CXXFLAGS=$INCLUDE_PATHS" >> $GITHUB_ENV
+          echo "LDFLAGS=$LIB_PATHS" >> $GITHUB_ENV
+          
+          # Set pkg-config path
           echo "PKG_CONFIG_PATH=$ICU_PREFIX/lib/pkgconfig:$HB_PREFIX/lib/pkgconfig:$GRAPHITE_PREFIX/lib/pkgconfig:$FT_PREFIX/lib/pkgconfig:$SSL_PREFIX/lib/pkgconfig:$FC_PREFIX/lib/pkgconfig" >> $GITHUB_ENV
           
-          # Force ICU detection
-          echo "ICU_INCLUDE_DIR=$ICU_PREFIX/include" >> $GITHUB_ENV
-          echo "ICU_ROOT=$ICU_PREFIX" >> $GITHUB_ENV
+          # Also set for bindgen
+          echo "BINDGEN_EXTRA_CLANG_ARGS=$INCLUDE_PATHS" >> $GITHUB_ENV
 
-      # --- WINDOWS SETUP (MSYS2) ---
-      - name: Setup MSYS2 (Windows)
+      # --- WINDOWS SETUP (vcpkg with static MSVC) ---
+      - name: Setup vcpkg (Windows)
         if: matrix.platform == 'windows-latest'
-        uses: msys2/setup-msys2@v2
+        uses: lukka/run-vcpkg@v11
         with:
-          msystem: MINGW64
-          update: true
-          install: >-
-            mingw-w64-x86_64-harfbuzz
-            mingw-w64-x86_64-graphite2
-            mingw-w64-x86_64-icu
-            mingw-w64-x86_64-freetype
-            mingw-w64-x86_64-fontconfig
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-pkg-config
-            base-devel
+          vcpkgGitCommitId: 'c82f74667287d3dc386bce81e44964370c91a289'
 
-      - name: Set Windows environment paths
+      - name: Install dependencies (Windows)
         if: matrix.platform == 'windows-latest'
         shell: pwsh
         run: |
-          $msys2Path = "D:\a\_temp\msys64\mingw64"
-          echo "PKG_CONFIG_PATH=$msys2Path/lib/pkgconfig" >> $env:GITHUB_ENV
-          echo "PATH=$msys2Path/bin;$env:PATH" >> $env:GITHUB_ENV
-          echo "$msys2Path/bin" >> $env:GITHUB_PATH
+          # Install required packages with static linkage for MSVC
+          vcpkg install harfbuzz:x64-windows-static graphite2:x64-windows-static icu:x64-windows-static freetype:x64-windows-static fontconfig:x64-windows-static openssl:x64-windows-static
+          
+          # Set environment variables for Cargo
+          $vcpkgRoot = "$env:VCPKG_ROOT\installed\x64-windows-static"
+          
+          echo "HARFBUZZ_NO_PKG_CONFIG=1" >> $env:GITHUB_ENV
+          echo "GRAPHITE2_NO_PKG_CONFIG=1" >> $env:GITHUB_ENV
+          echo "ICU_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
+          
+          # Set include and lib paths for cc-rs
+          echo "CFLAGS=-I$vcpkgRoot\include" >> $env:GITHUB_ENV
+          echo "CXXFLAGS=-I$vcpkgRoot\include" >> $env:GITHUB_ENV
+          echo "LIB=$vcpkgRoot\lib;$env:LIB" >> $env:GITHUB_ENV
+          echo "INCLUDE=$vcpkgRoot\include;$env:INCLUDE" >> $env:GITHUB_ENV
+          
+          # For static linking
+          echo "VCPKGRS_TRIPLET=x64-windows-static" >> $env:GITHUB_ENV
+          echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
