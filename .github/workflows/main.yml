@@ -1,0 +1,55 @@
+name: Release Standalone (Tectonic)
+on:
+  push:
+    tags:
+      - 'v*-standalone' # Triggers ONLY on tags like "v0.1.0-standalone"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
+    
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. Install Linux Dependencies (Tectonic needs extra libs)
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+          # Tectonic-specific dependencies:
+          sudo apt-get install -y libfontconfig1-dev libssl-dev
+
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Install Frontend Dependencies
+        run: npm ci
+
+      # 2. Build & Upload (With a custom name)
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          # We explicitly name this release "Standalone" so users aren't confused
+          releaseName: 'Tiya (Standalone Edition) ${{ github.ref_name }}'
+          releaseBody: 'Contains built-in Tectonic engine. No LaTeX installation required.'
+          releaseDraft: true
+          prerelease: false
