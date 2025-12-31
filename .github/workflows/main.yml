@@ -17,8 +17,9 @@ jobs:
             target: aarch64-apple-darwin
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-          - platform: windows-latest
-            target: x86_64-pc-windows-msvc
+          # Windows temporarily disabled - Tectonic C++ dependencies are complex to set up with MSVC
+          # - platform: windows-latest
+          #   target: x86_64-pc-windows-msvc
     
     runs-on: ${{ matrix.platform }}
 
@@ -40,7 +41,7 @@ jobs:
         run: |
           brew install icu4c harfbuzz graphite2 freetype openssl@3 pkg-config fontconfig
           
-          # Get brew prefixes
+          # Get brew prefixes (these are the base paths, NOT including /include)
           ICU_PREFIX=$(brew --prefix icu4c)
           HB_PREFIX=$(brew --prefix harfbuzz)
           GRAPHITE_PREFIX=$(brew --prefix graphite2)
@@ -48,51 +49,25 @@ jobs:
           SSL_PREFIX=$(brew --prefix openssl@3)
           FC_PREFIX=$(brew --prefix fontconfig)
           
-          # Build include paths - note harfbuzz headers are directly in include/
-          INCLUDE_PATHS="-I$HB_PREFIX/include -I$ICU_PREFIX/include -I$GRAPHITE_PREFIX/include -I$FT_PREFIX/include/freetype2 -I$FC_PREFIX/include"
+          # Build include paths - use base /include directories
+          # Code uses #include <harfbuzz/hb.h> so path should be .../include NOT .../include/harfbuzz
+          INCLUDE_PATHS="-I$HB_PREFIX/include -I$ICU_PREFIX/include -I$GRAPHITE_PREFIX/include -I$FT_PREFIX/include -I$FC_PREFIX/include"
           LIB_PATHS="-L$HB_PREFIX/lib -L$ICU_PREFIX/lib -L$GRAPHITE_PREFIX/lib -L$FT_PREFIX/lib -L$FC_PREFIX/lib"
           
           # Set compiler flags that cc-rs will pick up
           echo "CFLAGS=$INCLUDE_PATHS" >> $GITHUB_ENV
-          echo "CXXFLAGS=$INCLUDE_PATHS" >> $GITHUB_ENV
+          echo "CXXFLAGS=$INCLUDE_PATHS -std=c++14" >> $GITHUB_ENV
           echo "LDFLAGS=$LIB_PATHS" >> $GITHUB_ENV
           
           # Set pkg-config path
           echo "PKG_CONFIG_PATH=$ICU_PREFIX/lib/pkgconfig:$HB_PREFIX/lib/pkgconfig:$GRAPHITE_PREFIX/lib/pkgconfig:$FT_PREFIX/lib/pkgconfig:$SSL_PREFIX/lib/pkgconfig:$FC_PREFIX/lib/pkgconfig" >> $GITHUB_ENV
           
-          # Also set for bindgen
+          # For bindgen (clang args)
           echo "BINDGEN_EXTRA_CLANG_ARGS=$INCLUDE_PATHS" >> $GITHUB_ENV
-
-      # --- WINDOWS SETUP (vcpkg with static MSVC) ---
-      - name: Setup vcpkg (Windows)
-        if: matrix.platform == 'windows-latest'
-        uses: lukka/run-vcpkg@v11
-        with:
-          vcpkgGitCommitId: 'c82f74667287d3dc386bce81e44964370c91a289'
-
-      - name: Install dependencies (Windows)
-        if: matrix.platform == 'windows-latest'
-        shell: pwsh
-        run: |
-          # Install required packages with static linkage for MSVC
-          vcpkg install harfbuzz:x64-windows-static graphite2:x64-windows-static icu:x64-windows-static freetype:x64-windows-static fontconfig:x64-windows-static openssl:x64-windows-static
           
-          # Set environment variables for Cargo
-          $vcpkgRoot = "$env:VCPKG_ROOT\installed\x64-windows-static"
-          
-          echo "HARFBUZZ_NO_PKG_CONFIG=1" >> $env:GITHUB_ENV
-          echo "GRAPHITE2_NO_PKG_CONFIG=1" >> $env:GITHUB_ENV
-          echo "ICU_ROOT=$vcpkgRoot" >> $env:GITHUB_ENV
-          
-          # Set include and lib paths for cc-rs
-          echo "CFLAGS=-I$vcpkgRoot\include" >> $env:GITHUB_ENV
-          echo "CXXFLAGS=-I$vcpkgRoot\include" >> $env:GITHUB_ENV
-          echo "LIB=$vcpkgRoot\lib;$env:LIB" >> $env:GITHUB_ENV
-          echo "INCLUDE=$vcpkgRoot\include;$env:INCLUDE" >> $env:GITHUB_ENV
-          
-          # For static linking
-          echo "VCPKGRS_TRIPLET=x64-windows-static" >> $env:GITHUB_ENV
-          echo "RUSTFLAGS=-C target-feature=+crt-static" >> $env:GITHUB_ENV
+          # Debug: print paths
+          echo "Include paths: $INCLUDE_PATHS"
+          pkg-config --cflags harfbuzz || true
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
