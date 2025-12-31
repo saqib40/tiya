@@ -1,6 +1,5 @@
 name: Release Standalone (Tectonic)
 on:
-  workflow_dispatch: # <--- ADDED: Allows you to run this manually from Actions tab!
   push:
     tags:
       - 'v*-standalone'
@@ -29,30 +28,43 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
           sudo apt-get install -y libfontconfig1-dev libssl-dev libgraphite2-dev libharfbuzz-dev libicu-dev
 
-      # --- MACOS SETUP ---
+      # --- MACOS SETUP (FIXED HEADERS) ---
       - name: Install dependencies (macOS)
         if: matrix.platform == 'macos-latest'
         run: |
-          brew install pkg-config icu4c harfbuzz graphite2 freetype openssl@3
+          brew install icu4c harfbuzz graphite2 freetype openssl@3 pkg-config
           
-          # Force link the libraries
-          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig:$(brew --prefix harfbuzz)/lib/pkgconfig:$(brew --prefix graphite2)/lib/pkgconfig:$(brew --prefix freetype)/lib/pkgconfig:$(brew --prefix openssl@3)/lib/pkgconfig" >> $GITHUB_ENV
+          # 1. Get the raw paths
+          ICU_PREFIX=$(brew --prefix icu4c)
+          HB_PREFIX=$(brew --prefix harfbuzz)
+          GRAPHITE_PREFIX=$(brew --prefix graphite2)
+          SSL_PREFIX=$(brew --prefix openssl@3)
+          
+          # 2. Force Compiler flags (C_INCLUDE_PATH tells the compiler where headers are)
+          echo "C_INCLUDE_PATH=$ICU_PREFIX/include:$HB_PREFIX/include:$GRAPHITE_PREFIX/include" >> $GITHUB_ENV
+          echo "CPLUS_INCLUDE_PATH=$ICU_PREFIX/include:$HB_PREFIX/include:$GRAPHITE_PREFIX/include" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=$ICU_PREFIX/lib:$HB_PREFIX/lib:$GRAPHITE_PREFIX/lib" >> $GITHUB_ENV
+          
+          # 3. Force Pkg-Config Paths
+          echo "PKG_CONFIG_PATH=$ICU_PREFIX/lib/pkgconfig:$HB_PREFIX/lib/pkgconfig:$GRAPHITE_PREFIX/lib/pkgconfig:$SSL_PREFIX/lib/pkgconfig" >> $GITHUB_ENV
 
-      # --- WINDOWS SETUP (FIXED) ---
+      # --- WINDOWS SETUP (FIXED PATHS) ---
       - name: Install dependencies (Windows)
         if: matrix.platform == 'windows-latest'
         run: |
-          choco install nasm pkgconfiglite
+          # 1. Install pkg-config
+          choco install pkgconfiglite
           
-          # Install deps via VCPKG
+          # 2. Install Libraries via VCPKG
           vcpkg install harfbuzz:x64-windows graphite2:x64-windows icu:x64-windows freetype:x64-windows openssl:x64-windows zlib:x64-windows libpng:x64-windows
           
-          # CRITICAL FIX: Tell pkg-config where vcpkg put the .pc files
+          # 3. HARDCODE the pkg-config path to VCPKG
+          # (GitHub Actions puts vcpkg at C:\vcpkg)
           echo "PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows\lib\pkgconfig" >> $env:GITHUB_ENV
           
-          # Tell Rust to use vcpkg
+          # 4. Tell Rust where to look
           echo "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
-          echo "VCPKG_ROOT=C:/vcpkg" >> $env:GITHUB_ENV
+          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
