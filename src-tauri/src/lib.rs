@@ -42,7 +42,9 @@ fn read_file_content(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn compile_preview(file_path: String) -> Result<String, String> {
+async fn compile_preview(app_handle: tauri::AppHandle, file_path: String) -> Result<String, String> {
+    use tauri_plugin_shell::ShellExt;
+    
     println!("Compilation requested for: {}", file_path);
     
     let path = Path::new(&file_path);
@@ -53,25 +55,28 @@ async fn compile_preview(file_path: String) -> Result<String, String> {
     println!("Output directory: {}", parent_dir.display());
     println!("Target PDF: {}", pdf_path.display());
 
-    // Read the source file
-    let file_content = fs::read_to_string(&file_path).map_err(|e| format!("Failed to read source file: {}", e))?;
+    // Execute Tectonic sidecar binary
+    println!("Starting Tectonic sidecar compilation...");
+    
+    let output = app_handle
+        .shell()
+        .sidecar("tectonic")
+        .map_err(|e| format!("Failed to create sidecar command: {}", e))?
+        .args(["-X", "compile", "--outdir", &parent_dir.to_string_lossy(), &file_path])
+        .output()
+        .await
+        .map_err(|e| format!("Failed to execute Tectonic: {}", e))?;
 
-    // Execute Tectonic compilation in a blocking thread to avoid runtime panic
-    println!("Starting Tectonic compilation...");
-    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || {
-        tectonic::latex_to_pdf(file_content).map_err(|e| {
-            println!("Tectonic error: {:?}", e);
-            format!("Compilation failed: {}", e)
-        })
-    })
-    .await
-    .map_err(|e| format!("Runtime error: {}", e))??;
-
-    // Write the output PDF
-    fs::write(&pdf_path, pdf_bytes).map_err(|e| format!("Failed to write output PDF: {}", e))?;
-
-    println!("Compilation successful: {}", pdf_path.display());
-    Ok(pdf_path.to_string_lossy().to_string())
+    if output.status.success() {
+        println!("Compilation successful: {}", pdf_path.display());
+        Ok(pdf_path.to_string_lossy().to_string())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        println!("Tectonic STDOUT: {}", stdout);
+        println!("Tectonic STDERR: {}", stderr);
+        Err(format!("Compilation failed:\n{}", stderr))
+    }
 }
 
 #[tauri::command]

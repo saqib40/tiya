@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Tauri sidecar binaries (downloaded at build time)
+src-tauri/binaries/tectonic-*
+!src-tauri/binaries/README.md

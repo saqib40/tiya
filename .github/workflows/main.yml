@@ -1,30 +1,72 @@
-name: Release Standalone (Tectonic)
+name: Release Sidecar Edition
 on:
   push:
     tags:
-      - 'v*-standalone'
+      - 'v*-sidecar'
 
 permissions:
   contents: write
 
+env:
+  TECTONIC_VERSION: "0.15.0"
+
 jobs:
   release:
-    # Currently only Ubuntu builds work with Tectonic's complex C++ dependencies
-    # macOS and Windows require pre-built binaries or Docker cross-compilation
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+            tectonic_asset: tectonic-0.15.0-aarch64-apple-darwin.tar.gz
+          - platform: macos-13
+            target: x86_64-apple-darwin
+            tectonic_asset: tectonic-0.15.0-x86_64-apple-darwin.tar.gz
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            tectonic_asset: tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
+            tectonic_asset: tectonic-0.15.0-x86_64-pc-windows-msvc.zip
+    
+    runs-on: ${{ matrix.platform }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      # --- LINUX DEPENDENCIES ---
+      - name: Install dependencies (Ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-          sudo apt-get install -y libfontconfig1-dev libgraphite2-dev libharfbuzz-dev libicu-dev pkg-config
+
+      # --- DOWNLOAD TECTONIC SIDECAR ---
+      - name: Download Tectonic binary (Unix)
+        if: matrix.platform != 'windows-latest'
+        run: |
+          mkdir -p src-tauri/binaries
+          curl -L -o tectonic.tar.gz "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${{ env.TECTONIC_VERSION }}/${{ matrix.tectonic_asset }}"
+          tar -xzf tectonic.tar.gz
+          mv tectonic src-tauri/binaries/tectonic-${{ matrix.target }}
+          chmod +x src-tauri/binaries/tectonic-${{ matrix.target }}
+          rm tectonic.tar.gz
+
+      - name: Download Tectonic binary (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/binaries
+          Invoke-WebRequest -Uri "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${{ env.TECTONIC_VERSION }}/${{ matrix.tectonic_asset }}" -OutFile tectonic.zip
+          Expand-Archive -Path tectonic.zip -DestinationPath .
+          Move-Item -Path tectonic.exe -Destination src-tauri/binaries/tectonic-${{ matrix.target }}.exe
+          Remove-Item tectonic.zip
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -41,10 +83,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'Tiya (Standalone Edition) ${{ github.ref_name }}'
+          releaseName: 'Tiya (Sidecar Edition) ${{ github.ref_name }}'
           releaseBody: |
-            **Linux Release** - Contains built-in Tectonic engine. No LaTeX installation required.
+            **Cross-Platform Release** - Contains bundled Tectonic engine. No LaTeX installation required.
             
-            Note: macOS and Windows builds are not currently supported for the Tectonic edition due to complex C++ build requirements. For these platforms, please use the standard edition which requires a local LaTeX installation.
+            Supported platforms:
+            - Linux (x86_64)
+            - macOS (Apple Silicon & Intel)
+            - Windows (x64)
           releaseDraft: true
           prerelease: false
+          args: --target ${{ matrix.target }}
