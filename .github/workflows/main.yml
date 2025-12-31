@@ -26,27 +26,38 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-          sudo apt-get install -y libfontconfig1-dev libssl-dev
+          sudo apt-get install -y libfontconfig1-dev libssl-dev libgraphite2-dev libharfbuzz-dev libicu-dev
 
-      # --- MACOS SETUP (Fixed) ---
+      # --- MACOS SETUP (Heavy Duty Path Linking) ---
       - name: Install dependencies (macOS)
         if: matrix.platform == 'macos-latest'
         run: |
-          # Install pkg-config (Critical for finding libs) and deps
-          brew install pkg-config icu4c harfbuzz graphite2
+          brew install pkg-config icu4c harfbuzz graphite2 freetype openssl@3
           
-          # Link ICU4C so pkg-config can find it
-          echo "PKG_CONFIG_PATH=$(brew --prefix icu4c)/lib/pkgconfig" >> $GITHUB_ENV
-          echo "LIBRARY_PATH=$(brew --prefix icu4c)/lib" >> $GITHUB_ENV
+          # Construct the search path for all hidden libraries
+          ICU_PATH=$(brew --prefix icu4c)/lib/pkgconfig
+          HB_PATH=$(brew --prefix harfbuzz)/lib/pkgconfig
+          GRAPHITE_PATH=$(brew --prefix graphite2)/lib/pkgconfig
+          FREETYPE_PATH=$(brew --prefix freetype)/lib/pkgconfig
+          SSL_PATH=$(brew --prefix openssl@3)/lib/pkgconfig
+          
+          # Export to GITHUB_ENV so the build step sees it
+          echo "PKG_CONFIG_PATH=$ICU_PATH:$HB_PATH:$GRAPHITE_PATH:$FREETYPE_PATH:$SSL_PATH" >> $GITHUB_ENV
 
-      # --- WINDOWS SETUP (Fixed) ---
+      # --- WINDOWS SETUP (VCPKG) ---
       - name: Install dependencies (Windows)
         if: matrix.platform == 'windows-latest'
         run: |
-          # Install NASM and pkg-config (Required for Tectonic deps)
+          # 1. Install Build Tools
           choco install nasm pkgconfiglite
-          # Enable Long Paths
-          git config --system core.longpaths true
+          
+          # 2. Install Libraries via vcpkg (Pre-installed on GitHub Actions)
+          # This might take ~5-10 mins on the first run, but it is cached usually
+          vcpkg install harfbuzz:x64-windows graphite2:x64-windows icu:x64-windows freetype:x64-windows openssl:x64-windows zlib:x64-windows libpng:x64-windows
+          
+          # 3. Tell Rust to use vcpkg
+          echo "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
+          echo "VCPKG_ROOT=C:/vcpkg" >> $env:GITHUB_ENV
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
@@ -64,8 +75,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Force Tectonic to use system SSL on Mac/Linux, vendored on Windows
-          OPENSSL_NO_VENDOR: ${{ matrix.platform != 'windows-latest' }} 
+          # Windows uses vcpkg, so we don't vendor OpenSSL via Cargo features there
+          OPENSSL_NO_VENDOR: 1
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Tiya (Standalone Edition) ${{ github.ref_name }}'
