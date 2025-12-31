@@ -27,4 +27,5 @@ tauri-plugin-shell = "2.3.3"
 tauri-plugin-clipboard-manager = "2"
 notify = "6.1.1"
 tectonic = { version = "0.15", features = ["external-harfbuzz"] }
+openssl = { version = "0.10.75", features = ["vendored"] }
 
