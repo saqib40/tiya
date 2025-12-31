@@ -12,7 +12,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [macos-latest, ubuntu-22.04, windows-latest]
+        include:
+          - platform: macos-latest
+            target: aarch64-apple-darwin
+          - platform: macos-13
+            target: x86_64-apple-darwin
+          - platform: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - platform: windows-latest
+            target: x86_64-pc-windows-msvc
     
     runs-on: ${{ matrix.platform }}
 
@@ -26,48 +34,61 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
-          sudo apt-get install -y libfontconfig1-dev libssl-dev libgraphite2-dev libharfbuzz-dev libicu-dev
+          sudo apt-get install -y libfontconfig1-dev libgraphite2-dev libharfbuzz-dev libicu-dev pkg-config
 
-      # --- MACOS SETUP (FIXED HEADERS) ---
+      # --- MACOS SETUP ---
       - name: Install dependencies (macOS)
-        if: matrix.platform == 'macos-latest'
+        if: startsWith(matrix.platform, 'macos')
         run: |
-          brew install icu4c harfbuzz graphite2 freetype openssl@3 pkg-config
+          brew install icu4c harfbuzz graphite2 freetype openssl@3 pkg-config fontconfig
           
-          # 1. Get the raw paths
+          # Get brew prefixes
           ICU_PREFIX=$(brew --prefix icu4c)
           HB_PREFIX=$(brew --prefix harfbuzz)
           GRAPHITE_PREFIX=$(brew --prefix graphite2)
+          FT_PREFIX=$(brew --prefix freetype)
           SSL_PREFIX=$(brew --prefix openssl@3)
+          FC_PREFIX=$(brew --prefix fontconfig)
           
-          # 2. Force Compiler flags (C_INCLUDE_PATH tells the compiler where headers are)
-          echo "C_INCLUDE_PATH=$ICU_PREFIX/include:$HB_PREFIX/include:$GRAPHITE_PREFIX/include" >> $GITHUB_ENV
-          echo "CPLUS_INCLUDE_PATH=$ICU_PREFIX/include:$HB_PREFIX/include:$GRAPHITE_PREFIX/include" >> $GITHUB_ENV
-          echo "LIBRARY_PATH=$ICU_PREFIX/lib:$HB_PREFIX/lib:$GRAPHITE_PREFIX/lib" >> $GITHUB_ENV
+          # Set comprehensive compiler paths
+          echo "CPATH=$ICU_PREFIX/include:$HB_PREFIX/include/harfbuzz:$GRAPHITE_PREFIX/include:$FT_PREFIX/include/freetype2:$FC_PREFIX/include" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=$ICU_PREFIX/lib:$HB_PREFIX/lib:$GRAPHITE_PREFIX/lib:$FT_PREFIX/lib:$FC_PREFIX/lib" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$ICU_PREFIX/lib/pkgconfig:$HB_PREFIX/lib/pkgconfig:$GRAPHITE_PREFIX/lib/pkgconfig:$FT_PREFIX/lib/pkgconfig:$SSL_PREFIX/lib/pkgconfig:$FC_PREFIX/lib/pkgconfig" >> $GITHUB_ENV
           
-          # 3. Force Pkg-Config Paths
-          echo "PKG_CONFIG_PATH=$ICU_PREFIX/lib/pkgconfig:$HB_PREFIX/lib/pkgconfig:$GRAPHITE_PREFIX/lib/pkgconfig:$SSL_PREFIX/lib/pkgconfig" >> $GITHUB_ENV
+          # Force ICU detection
+          echo "ICU_INCLUDE_DIR=$ICU_PREFIX/include" >> $GITHUB_ENV
+          echo "ICU_ROOT=$ICU_PREFIX" >> $GITHUB_ENV
 
-      # --- WINDOWS SETUP (FIXED PATHS) ---
-      - name: Install dependencies (Windows)
+      # --- WINDOWS SETUP (MSYS2) ---
+      - name: Setup MSYS2 (Windows)
         if: matrix.platform == 'windows-latest'
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-harfbuzz
+            mingw-w64-x86_64-graphite2
+            mingw-w64-x86_64-icu
+            mingw-w64-x86_64-freetype
+            mingw-w64-x86_64-fontconfig
+            mingw-w64-x86_64-openssl
+            mingw-w64-x86_64-pkg-config
+            base-devel
+
+      - name: Set Windows environment paths
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
         run: |
-          # 1. Install pkg-config
-          choco install pkgconfiglite
-          
-          # 2. Install Libraries via VCPKG
-          vcpkg install harfbuzz:x64-windows graphite2:x64-windows icu:x64-windows freetype:x64-windows openssl:x64-windows zlib:x64-windows libpng:x64-windows
-          
-          # 3. HARDCODE the pkg-config path to VCPKG
-          # (GitHub Actions puts vcpkg at C:\vcpkg)
-          echo "PKG_CONFIG_PATH=C:\vcpkg\installed\x64-windows\lib\pkgconfig" >> $env:GITHUB_ENV
-          
-          # 4. Tell Rust where to look
-          echo "VCPKGRS_DYNAMIC=1" >> $env:GITHUB_ENV
-          echo "VCPKG_ROOT=C:\vcpkg" >> $env:GITHUB_ENV
+          $msys2Path = "D:\a\_temp\msys64\mingw64"
+          echo "PKG_CONFIG_PATH=$msys2Path/lib/pkgconfig" >> $env:GITHUB_ENV
+          echo "PATH=$msys2Path/bin;$env:PATH" >> $env:GITHUB_ENV
+          echo "$msys2Path/bin" >> $env:GITHUB_PATH
 
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -89,3 +110,4 @@ jobs:
           releaseBody: 'Contains built-in Tectonic engine. No LaTeX installation required.'
           releaseDraft: true
           prerelease: false
+          args: --target ${{ matrix.target }}
