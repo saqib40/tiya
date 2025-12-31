@@ -2,6 +2,9 @@ use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+use tauri::{Emitter, Window};
+use notify::{Watcher, RecursiveMode, RecommendedWatcher, Config};
+use std::sync::mpsc::channel;
 
 #[derive(Serialize, Clone)]
 pub struct FileNode {
@@ -45,7 +48,8 @@ async fn compile_preview(file_path: String) -> Result<String, String> {
     
     let path = Path::new(&file_path);
     let parent_dir = path.parent().ok_or("Invalid file path: no parent directory")?;
-    let pdf_path = parent_dir.join("preview.pdf");
+    let file_stem = path.file_stem().ok_or("Invalid file name")?.to_string_lossy();
+    let pdf_path = parent_dir.join(format!("{}.pdf", file_stem));
 
     println!("Output directory: {}", parent_dir.display());
     println!("Target PDF: {}", pdf_path.display());
@@ -56,7 +60,6 @@ async fn compile_preview(file_path: String) -> Result<String, String> {
         .arg("-interaction=nonstopmode")
         .arg("-output-directory")
         .arg(parent_dir)
-        .arg("-jobname=preview")
         .arg(&file_path);
 
     // Platform-specific popup hiding for Windows
@@ -88,6 +91,28 @@ async fn compile_preview(file_path: String) -> Result<String, String> {
             stdout.lines().last().unwrap_or("")
         ))
     }
+}
+
+#[tauri::command]
+fn watch_directory(path: String, window: Window) {
+    std::thread::spawn(move || {
+        let (tx, rx) = channel();
+        let mut watcher = RecommendedWatcher::new(tx, Config::default()).map_err(|e| e.to_string()).unwrap();
+
+        watcher.watch(Path::new(&path), RecursiveMode::Recursive).map_err(|e| e.to_string()).unwrap();
+
+        println!("Started watching: {}", path);
+
+        for res in rx {
+            match res {
+                Ok(_event) => {
+                    // We emit a simple event to trigger a refresh in the frontend
+                    let _ = window.emit("fs-change", {});
+                }
+                Err(e) => println!("watch error: {:?}", e),
+            }
+        }
+    });
 }
 
 #[tauri::command]
@@ -155,7 +180,8 @@ pub fn run() {
             create_file,
             create_directory,
             delete_node,
-            move_node
+            move_node,
+            watch_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
