@@ -9,70 +9,22 @@ permissions:
 
 jobs:
   release:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: macos-latest
-            target: aarch64-apple-darwin
-          - platform: ubuntu-22.04
-            target: x86_64-unknown-linux-gnu
-          # Windows temporarily disabled - Tectonic C++ dependencies are complex to set up with MSVC
-          # - platform: windows-latest
-          #   target: x86_64-pc-windows-msvc
-    
-    runs-on: ${{ matrix.platform }}
+    # Currently only Ubuntu builds work with Tectonic's complex C++ dependencies
+    # macOS and Windows require pre-built binaries or Docker cross-compilation
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # --- LINUX SETUP ---
-      - name: Install dependencies (Ubuntu)
-        if: matrix.platform == 'ubuntu-22.04'
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
           sudo apt-get install -y libfontconfig1-dev libgraphite2-dev libharfbuzz-dev libicu-dev pkg-config
 
-      # --- MACOS SETUP ---
-      - name: Install dependencies (macOS)
-        if: matrix.platform == 'macos-latest'
-        run: |
-          brew install icu4c harfbuzz graphite2 freetype openssl@3 pkg-config fontconfig
-          
-          # Get brew prefixes (these are the base paths, NOT including /include)
-          ICU_PREFIX=$(brew --prefix icu4c)
-          HB_PREFIX=$(brew --prefix harfbuzz)
-          GRAPHITE_PREFIX=$(brew --prefix graphite2)
-          FT_PREFIX=$(brew --prefix freetype)
-          SSL_PREFIX=$(brew --prefix openssl@3)
-          FC_PREFIX=$(brew --prefix fontconfig)
-          
-          # Build include paths - use base /include directories
-          # Code uses #include <harfbuzz/hb.h> so path should be .../include NOT .../include/harfbuzz
-          INCLUDE_PATHS="-I$HB_PREFIX/include -I$ICU_PREFIX/include -I$GRAPHITE_PREFIX/include -I$FT_PREFIX/include -I$FC_PREFIX/include"
-          LIB_PATHS="-L$HB_PREFIX/lib -L$ICU_PREFIX/lib -L$GRAPHITE_PREFIX/lib -L$FT_PREFIX/lib -L$FC_PREFIX/lib"
-          
-          # Set compiler flags that cc-rs will pick up
-          echo "CFLAGS=$INCLUDE_PATHS" >> $GITHUB_ENV
-          echo "CXXFLAGS=$INCLUDE_PATHS -std=c++14" >> $GITHUB_ENV
-          echo "LDFLAGS=$LIB_PATHS" >> $GITHUB_ENV
-          
-          # Set pkg-config path
-          echo "PKG_CONFIG_PATH=$ICU_PREFIX/lib/pkgconfig:$HB_PREFIX/lib/pkgconfig:$GRAPHITE_PREFIX/lib/pkgconfig:$FT_PREFIX/lib/pkgconfig:$SSL_PREFIX/lib/pkgconfig:$FC_PREFIX/lib/pkgconfig" >> $GITHUB_ENV
-          
-          # For bindgen (clang args)
-          echo "BINDGEN_EXTRA_CLANG_ARGS=$INCLUDE_PATHS" >> $GITHUB_ENV
-          
-          # Debug: print paths
-          echo "Include paths: $INCLUDE_PATHS"
-          pkg-config --cflags harfbuzz || true
-
       - name: Rust setup
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -87,11 +39,12 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OPENSSL_NO_VENDOR: 1
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Tiya (Standalone Edition) ${{ github.ref_name }}'
-          releaseBody: 'Contains built-in Tectonic engine. No LaTeX installation required.'
+          releaseBody: |
+            **Linux Release** - Contains built-in Tectonic engine. No LaTeX installation required.
+            
+            Note: macOS and Windows builds are not currently supported for the Tectonic edition due to complex C++ build requirements. For these platforms, please use the standard edition which requires a local LaTeX installation.
           releaseDraft: true
           prerelease: false
-          args: --target ${{ matrix.target }}
