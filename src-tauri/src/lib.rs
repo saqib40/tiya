@@ -1,7 +1,6 @@
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
 use tauri::{Emitter, Window};
 use notify::{Watcher, RecursiveMode, RecommendedWatcher, Config};
 use std::sync::mpsc::channel;
@@ -54,43 +53,25 @@ async fn compile_preview(file_path: String) -> Result<String, String> {
     println!("Output directory: {}", parent_dir.display());
     println!("Target PDF: {}", pdf_path.display());
 
-    // Execute pdflatex
-    let mut command = Command::new("pdflatex");
-    command
-        .arg("-interaction=nonstopmode")
-        .arg("-output-directory")
-        .arg(parent_dir)
-        .arg(&file_path);
+    // Read the source file
+    let file_content = fs::read_to_string(&file_path).map_err(|e| format!("Failed to read source file: {}", e))?;
 
-    // Platform-specific popup hiding for Windows
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x08000000;
-        command.creation_flags(CREATE_NO_WINDOW);
-    }
+    // Execute Tectonic compilation in a blocking thread to avoid runtime panic
+    println!("Starting Tectonic compilation...");
+    let pdf_bytes = tauri::async_runtime::spawn_blocking(move || {
+        tectonic::latex_to_pdf(file_content).map_err(|e| {
+            println!("Tectonic error: {:?}", e);
+            format!("Compilation failed: {}", e)
+        })
+    })
+    .await
+    .map_err(|e| format!("Runtime error: {}", e))??;
 
-    let output = command.output().map_err(|e| {
-        println!("Failed to execute pdflatex: {}", e);
-        e.to_string()
-    })?;
+    // Write the output PDF
+    fs::write(&pdf_path, pdf_bytes).map_err(|e| format!("Failed to write output PDF: {}", e))?;
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    println!("--- pdflatex STDOUT ---\n{}\n-----------------------", stdout);
-    println!("--- pdflatex STDERR ---\n{}\n-----------------------", stderr);
-
-    if output.status.success() {
-        println!("Compilation successful: {}", pdf_path.display());
-        Ok(pdf_path.to_string_lossy().to_string())
-    } else {
-        println!("Compilation failed with exit code: {:?}", output.status.code());
-        Err(format!(
-            "Compilation failed. Check terminal for logs.\nSTDOUT Snippet: {}",
-            stdout.lines().last().unwrap_or("")
-        ))
-    }
+    println!("Compilation successful: {}", pdf_path.display());
+    Ok(pdf_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]

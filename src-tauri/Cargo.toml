@@ -26,4 +26,5 @@ tauri-plugin-dialog = "2.4.2"
 tauri-plugin-shell = "2.3.3"
 tauri-plugin-clipboard-manager = "2"
 notify = "6.1.1"
+tectonic = { version = "0.15", features = ["external-harfbuzz"] }
 
