@@ -1,0 +1,53 @@
+name: Release App
+on:
+  push:
+    tags:
+      - 'v*' # Triggers only when you push a tag like v0.1.0, v1.0.0, etc.
+
+jobs:
+  release:
+    permissions:
+      contents: write # REQUIRED to allow the action to create Releases
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
+    
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 1. Install Linux Dependencies (Only needed for the Ubuntu runner)
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      # 2. Setup Rust
+      - name: Rust setup
+        uses: dtolnay/rust-toolchain@stable
+
+      # 3. Setup Node.js (for building the React frontend)
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+          cache: 'npm'
+
+      - name: Install Frontend Dependencies
+        run: npm ci # Uses clean install from package-lock.json
+
+      # 4. Build & Upload to Release
+      - name: Build the app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Tiya ${{ github.ref_name }}'
+          releaseBody: 'See the assets to download and install.'
+          releaseDraft: true # Creates a "Draft" so you can edit release notes before publishing
+          prerelease: false
