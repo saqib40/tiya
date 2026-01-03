@@ -50,6 +50,13 @@ We offer two editions of Tiya depending on your needs.
     * [**Fedora / Red Hat / CentOS**](https://github.com/saqib40/tiya/releases/download/v0.1.0/tiya-0.1.0-1.x86_64.rpm)
     * [**Universal** - Works on any distro, no install needed](https://github.com/saqib40/tiya/releases/download/v0.1.0/tiya_0.1.0_amd64.AppImage)
 
+Note for macOS Users: Because this app is not yet notarized by Apple, you may see a "Damaged" error.
+To fix this, run 
+```bash 
+xattr -cr /Applications/Tiya.app 
+```
+in your terminal after dragging it to Applications. 
+
 ## Features
 * **Live Preview:** See your PDF update as you type.
 * **Cross-Platform:** Runs natively on Windows, macOS, and Linux.
