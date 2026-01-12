@@ -24,14 +24,15 @@ interface PDFPreviewProps {
     pdfPath: string | null;
     pdfRevision?: number;
     compiling?: boolean;
+    error:string | null;
 }
 
-const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false }: PDFPreviewProps) => {
+const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error}: PDFPreviewProps) => {
     const [numPages, setNumPages] = useState<number | null>(null);
     const [containerWidth, setContainerWidth] = useState<number>(600);
     const [scale, setScale] = useState<number>(1.0);
     const [fitToWidth, setFitToWidth] = useState<boolean>(true);
-    const [error, setError] = useState<string | null>(null);
+    // const [error, setError] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Cache-busted URL
@@ -61,7 +62,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false }: PDFPreviewP
 
     function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
         setNumPages(numPages);
-        setError(null);
+        // setError(null);
     }
 
     const zoomIn = () => {
@@ -166,6 +167,21 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false }: PDFPreviewP
 
             {/* Scrollable Viewport */}
             <div className="flex-1 overflow-auto custom-scrollbar flex flex-col items-center p-8 pt-24 min-h-full">
+                {error && (
+                    <div className="w-full h-full flex items-center justify-center">
+                        <div className="max-w-2xl w-full bg-red-950/40 border border-red-800/50 rounded-2xl p-6 shadow-2xl">
+                        <div className="flex items-center gap-2 mb-3">
+                            <AlertCircle className="w-5 h-5 text-red-500" /><span className="text-xs font-black uppercase tracking-widest text-red-400">
+                                LaTeX Compilation Error
+                                </span>
+                                </div>
+                                <pre className="text-sm whitespace-pre-wrap font-mono text-red-200 leading-relaxed">
+                                      {error}
+                                      </pre>
+                                      </div>
+                                      </div>
+                                    )}
+
                 {/* Compiling Overlay */}
                 {compiling && (
                     <div className="fixed inset-0 pointer-events-none z-40 bg-slate-950/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-300">
@@ -176,7 +192,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false }: PDFPreviewP
                     </div>
                 )}
 
-                {!pdfPath && !compiling && (
+                {!pdfPath && !compiling && !error && (
                     <div className="flex-1 flex flex-col items-center justify-center gap-6 select-none h-full min-h-[400px]">
                         <div className="relative">
                             <Maximize className="w-24 h-24 stroke-[1] text-slate-600 opacity-50" />
@@ -191,11 +207,12 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false }: PDFPreviewP
                     </div>
                 )}
 
-                {pdfPath && (
+                {pdfPath && !error && (
                     <Document
                         file={assetUrl}
                         onLoadSuccess={onDocumentLoadSuccess}
-                        onLoadError={(err) => setError(err.message)}
+                        // onLoadError={(err) => setError(err.message)} if fix not wrks revert bk
+                        onLoadError={(err) => console.log("PDF load error:",err)}
                         loading={null}
                         className="flex flex-col items-center gap-12 w-full"
                     >
@@ -220,7 +237,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false }: PDFPreviewP
                     </Document>
                 )}
 
-                {error && (
+                {/* {error && (
                     <div className="fixed bottom-8 right-8 z-50 p-4 bg-red-950/80 backdrop-blur-md border border-red-500/30 rounded-2xl flex items-center gap-4 text-red-200 shadow-2xl animate-in slide-in-from-bottom-4">
                         <AlertCircle className="w-5 h-5 text-red-500" />
                         <div className="flex flex-col">
@@ -234,7 +251,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false }: PDFPreviewP
                             <RefreshCw size={14} />
                         </button>
                     </div>
-                )}
+                )} */} 
             </div>
         </div>
     );
