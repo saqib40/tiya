@@ -10,17 +10,18 @@ import Home from "./components/Home";
 import TitleBar from "./components/TitleBar";
 
 type PipelineStatus = 'Ready' | 'Saving...' | 'Compiling...' | 'Error';
-function cleanError(raw:string):string{
-    const lines=raw.split('\n');
-    const useful=lines.filter(line=>
-        line.trim()!='' &&
+function cleanError(raw: string): string {
+    const lines = raw.split('\n');
+    const useful = lines.filter(line =>
+        line.trim() !== '' &&
         !line.toLowerCase().includes('fontconfig') &&
-        !line.toLowerCase().includes('compilation failed')&&
+        !line.toLowerCase().includes('compilation failed') &&
         !line.toLowerCase().includes('halted on')
-    )
-    const main=useful.find(line=>line.includes('.tex:'))
-    return main?.trim() || useful[0]?.trim()||'Unknown LaTex error';
+    );
+    const main = useful.find(line => line.includes('.tex:'));
+    return main?.trim() || useful[0]?.trim() || 'Unknown LaTeX error';
 }
+
 function App() {
     const [projectPath, setProjectPath] = useState<string | null>(null);
     const [activeFileContent, setActiveFileContent] = useState<string | null>(null);
@@ -28,7 +29,7 @@ function App() {
     const [pdfPath, setPdfPath] = useState<string | null>(null);
     const [pdfRevision, setPdfRevision] = useState<number>(0);
     const [status, setStatus] = useState<PipelineStatus>('Ready');
-    const [compileError,setCompileError]=useState<string| null>(null);
+    const [compileError, setCompileError] = useState<string | null>(null);
 
     const lastSavedContent = useRef<string | null>(null);
 
@@ -37,6 +38,7 @@ function App() {
         setActiveFileContent(content);
         lastSavedContent.current = content;
         setStatus('Ready');
+        setCompileError(null);
         // Reset preview when switching files
         setPdfPath(null);
         setPdfRevision(0);
@@ -65,32 +67,23 @@ function App() {
             }
 
             setStatus('Ready');
-        } catch (error:any){ //log the errors [show the errors in which line]
-            console.log("Pipeline failed:",error);
-            let raw="";
-            if(typeof error==="string"){
-                raw=error;
-            }else if(error?.message){
-                raw=error.message;
-            }else{
-                raw=JSON.stringify(raw);
+        } catch (error: unknown) {
+            console.error("Pipeline failed:", error);
+            let raw: string;
+            if (typeof error === "string") {
+                raw = error;
+            } else if (error instanceof Error) {
+                raw = error.message;
+            } else {
+                try {
+                    raw = JSON.stringify(error) || String(error);
+                } catch {
+                    raw = String(error);
+                }
             }
-            const cleaned=cleanError(raw);
-            // let message="Unknown error occured";
-            // if(typeof error==='string'){
-            //     message=error;
-            // }else if(error?.message){
-            //     message=error.message;
-            // }else{
-            //     message=JSON.stringify(error);
-            // }
-            setCompileError(cleaned);
+            setCompileError(cleanError(raw));
             setStatus('Error');
         }
-        // catch (error) {
-        //     console.error("Pipeline failed:", error);
-        //     setStatus('Error');
-        // }
     }, []);
 
     // Automated Workflow Effect (Debounced)

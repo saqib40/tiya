@@ -8,8 +8,7 @@ import {
     ZoomOut,
     Maximize,
     ChevronLeft,
-    ChevronRight,
-    RefreshCw
+    ChevronRight
 } from 'lucide-react';
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -24,15 +23,15 @@ interface PDFPreviewProps {
     pdfPath: string | null;
     pdfRevision?: number;
     compiling?: boolean;
-    error:string | null;
+    error: string | null;
 }
 
-const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error}: PDFPreviewProps) => {
+const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error }: PDFPreviewProps) => {
     const [numPages, setNumPages] = useState<number | null>(null);
     const [containerWidth, setContainerWidth] = useState<number>(600);
     const [scale, setScale] = useState<number>(1.0);
     const [fitToWidth, setFitToWidth] = useState<boolean>(true);
-    // const [error, setError] = useState<string | null>(null);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Cache-busted URL
@@ -41,6 +40,10 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error}: PDFPr
         const base = convertFileSrc(pdfPath);
         return `${base}?rev=${pdfRevision}`;
     }, [pdfPath, pdfRevision]);
+
+    useEffect(() => {
+        setLoadError(null);
+    }, [assetUrl]);
 
     // Handle Resize
     const handleResize = useCallback((entries: ResizeObserverEntry[]) => {
@@ -62,7 +65,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error}: PDFPr
 
     function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
         setNumPages(numPages);
-        // setError(null);
+        setLoadError(null);
     }
 
     const zoomIn = () => {
@@ -167,20 +170,21 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error}: PDFPr
 
             {/* Scrollable Viewport */}
             <div className="flex-1 overflow-auto custom-scrollbar flex flex-col items-center p-8 pt-24 min-h-full">
-                {error && (
+                {(error || loadError) && (
                     <div className="w-full h-full flex items-center justify-center">
                         <div className="max-w-2xl w-full bg-red-950/40 border border-red-800/50 rounded-2xl p-6 shadow-2xl">
-                        <div className="flex items-center gap-2 mb-3">
-                            <AlertCircle className="w-5 h-5 text-red-500" /><span className="text-xs font-black uppercase tracking-widest text-red-400">
-                                LaTeX Compilation Error
+                            <div className="flex items-center gap-2 mb-3">
+                                <AlertCircle className="w-5 h-5 text-red-500" />
+                                <span className="text-xs font-black uppercase tracking-widest text-red-400">
+                                    {error ? 'LaTeX Compilation Error' : 'PDF Preview Error'}
                                 </span>
-                                </div>
-                                <pre className="text-sm whitespace-pre-wrap font-mono text-red-200 leading-relaxed">
-                                      {error}
-                                      </pre>
-                                      </div>
-                                      </div>
-                                    )}
+                            </div>
+                            <pre className="text-sm whitespace-pre-wrap font-mono text-red-200 leading-relaxed">
+                                {error || loadError}
+                            </pre>
+                        </div>
+                    </div>
+                )}
 
                 {/* Compiling Overlay */}
                 {compiling && (
@@ -192,7 +196,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error}: PDFPr
                     </div>
                 )}
 
-                {!pdfPath && !compiling && !error && (
+                {!pdfPath && !compiling && !error && !loadError && (
                     <div className="flex-1 flex flex-col items-center justify-center gap-6 select-none h-full min-h-[400px]">
                         <div className="relative">
                             <Maximize className="w-24 h-24 stroke-[1] text-slate-600 opacity-50" />
@@ -207,12 +211,11 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error}: PDFPr
                     </div>
                 )}
 
-                {pdfPath && !error && (
+                {pdfPath && !error && !loadError && (
                     <Document
                         file={assetUrl}
                         onLoadSuccess={onDocumentLoadSuccess}
-                        // onLoadError={(err) => setError(err.message)} if fix not wrks revert bk
-                        onLoadError={(err) => console.log("PDF load error:",err)}
+                        onLoadError={(loadFailure) => setLoadError(loadFailure.message)}
                         loading={null}
                         className="flex flex-col items-center gap-12 w-full"
                     >
@@ -237,21 +240,6 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error}: PDFPr
                     </Document>
                 )}
 
-                {/* {error && (
-                    <div className="fixed bottom-8 right-8 z-50 p-4 bg-red-950/80 backdrop-blur-md border border-red-500/30 rounded-2xl flex items-center gap-4 text-red-200 shadow-2xl animate-in slide-in-from-bottom-4">
-                        <AlertCircle className="w-5 h-5 text-red-500" />
-                        <div className="flex flex-col">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-red-400">Preview Error</span>
-                            <span className="text-[11px] font-mono opacity-80">{error}</span>
-                        </div>
-                        <button
-                            onClick={() => window.location.reload()}
-                            className="p-2 hover:bg-white/5 rounded-lg transition-colors"
-                        >
-                            <RefreshCw size={14} />
-                        </button>
-                    </div>
-                )} */} 
             </div>
         </div>
     );
