@@ -11,7 +11,12 @@ interface CodeEditorProps {
 
 const CodeEditor = ({ code, onChange, onSave }: CodeEditorProps) => {
     const editorRef = useRef<any>(null);
+    const onSaveRef = useRef(onSave);
     const [isPasting, setIsPasting] = useState(false);
+
+    useEffect(() => {
+        onSaveRef.current = onSave;
+    }, [onSave]);
 
     const handleEditorWillMount: BeforeMount = (monaco) => {
         // Explicitly Register the LaTeX language inside the component
@@ -129,7 +134,7 @@ const CodeEditor = ({ code, onChange, onSave }: CodeEditorProps) => {
 
         // Ctrl+S Save Command
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
-            if (onSave) onSave();
+            onSaveRef.current?.();
         });
     };
 
