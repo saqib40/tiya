@@ -7,6 +7,7 @@ use std::sync::mpsc::channel;
 
 mod filesystem;
 mod project;
+mod compiler;
 
 #[tauri::command]
 fn load_project(path: String) -> Result<project::ProjectInfo, String> {
@@ -55,42 +56,13 @@ fn read_file_content(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-async fn compile_preview(app_handle: tauri::AppHandle, file_path: String) -> Result<String, String> {
-    use tauri_plugin_shell::ShellExt;
-    
-    println!("Compilation requested for: {}", file_path);
-    
-    let path = Path::new(&file_path);
-    let parent_dir = path.parent().ok_or("Invalid file path: no parent directory")?;
-    let file_stem = path.file_stem().ok_or("Invalid file name")?.to_string_lossy();
-    let pdf_path = parent_dir.join(format!("{}.pdf", file_stem));
+async fn compile_preview(app_handle: tauri::AppHandle, state: tauri::State<'_, compiler::CompilerState>, file_path: String, request_id: String) -> Result<compiler::CompileResult, String> {
+    compiler::compile(&app_handle, &state, &request_id, Path::new(&file_path)).await
+}
 
-    println!("Output directory: {}", parent_dir.display());
-    println!("Target PDF: {}", pdf_path.display());
-
-    // Execute Tectonic sidecar binary
-    println!("Starting Tectonic sidecar compilation...");
-    
-    let output = app_handle
-        .shell()
-        .sidecar("tectonic")
-        .map_err(|e| format!("Failed to create sidecar command: {}", e))?
-        .current_dir(parent_dir)
-        .args(["-X", "compile", "--outdir", &parent_dir.to_string_lossy(), &file_path])
-        .output()
-        .await
-        .map_err(|e| format!("Failed to execute Tectonic: {}", e))?;
-
-    if output.status.success() {
-        println!("Compilation successful: {}", pdf_path.display());
-        Ok(pdf_path.to_string_lossy().to_string())
-    } else {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        println!("Tectonic STDOUT: {}", stdout);
-        println!("Tectonic STDERR: {}", stderr);
-        Err(format!("Compilation failed:\n{}", stderr))
-    }
+#[tauri::command]
+fn cancel_compile(state: tauri::State<'_, compiler::CompilerState>, request_id: String) -> Result<(), String> {
+    compiler::cancel(&state, &request_id)
 }
 
 #[tauri::command]
@@ -163,6 +135,7 @@ fn move_node(source: String, destination: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(compiler::CompilerState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -178,6 +151,7 @@ pub fn run() {
             open_directory,
             read_file_content,
             compile_preview,
+            cancel_compile,
             save_file,
             create_file,
             create_directory,

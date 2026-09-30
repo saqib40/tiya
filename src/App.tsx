@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
 import CodeEditor from "./components/CodeEditor";
@@ -12,15 +12,16 @@ import { ProjectInfo, relativePath } from "./lib/project";
 import Home from "./components/Home";
 import TitleBar from "./components/TitleBar";
 
-type PipelineStatus = 'Ready' | 'Unsaved' | 'Saving...' | 'Compiling...' | 'Error';
+type PipelineStatus = 'Ready' | 'Unsaved' | 'Saving...' | 'Compiling...' | 'Error' | 'Cancelled' | 'Outdated';
 
 function App() {
     const [projectPath, setProjectPath] = useState<string | null>(null);
     const [rootFile, setRootFile] = useState<string | null>(null);
     const [texFiles, setTexFiles] = useState<string[]>([]);
     const [projectError, setProjectError] = useState<string | null>(null);
-    const compiler = useCompiler(rootFile);
-    const documents = useDocuments(compiler.requestCompile);
+    const [automaticCompile, setAutomaticCompile] = useState(true);
+    const compiler = useCompiler(rootFile, automaticCompile);
+    const documents = useDocuments(compiler.sourceSaved);
     const filePath = documents.activePath;
     const activeFileContent = documents.activeDocument?.content ?? null;
     const status: PipelineStatus = documents.error ? 'Error' : documents.saving ? 'Saving...'
@@ -67,7 +68,16 @@ function App() {
 
     const handleSave = async () => {
         try {
-            if (!await documents.saveDocument(filePath)) compiler.requestCompile();
+            await documents.flushAll();
+        } catch {
+            return;
+        }
+    };
+
+    const handleBuild = async () => {
+        try {
+            await documents.flushAll();
+            compiler.requestCompile();
         } catch {
             return;
         }
@@ -92,7 +102,21 @@ function App() {
                             <option value="" disabled>Choose a root document</option>
                             {texFiles.map(path => <option key={path} value={path}>{relativePath(projectPath, path)}</option>)}
                         </select>
+                        <label className="flex shrink-0 items-center gap-2">
+                            <input type="checkbox" checked={automaticCompile} onChange={event => setAutomaticCompile(event.target.checked)} />
+                            Auto build
+                        </label>
+                        <button type="button" onClick={() => void handleBuild()} disabled={!rootFile} title="Build PDF" aria-label="Build PDF" className="p-1.5 text-emerald-400 disabled:opacity-40">
+                            <Play size={16} />
+                        </button>
+                        <button type="button" onClick={compiler.cancelCompile} disabled={compiler.status !== 'Compiling...'} title="Cancel build" aria-label="Cancel build" className="p-1.5 text-red-300 disabled:opacity-40">
+                            <Square size={16} />
+                        </button>
                     </div>
+                    {compiler.log && <details className="max-h-40 shrink-0 overflow-auto border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs">
+                        <summary className="cursor-pointer">Build output</summary>
+                        <pre className="whitespace-pre-wrap break-words py-2 font-mono text-slate-300">{compiler.log}</pre>
+                    </details>}
                     <div className="flex-1 relative overflow-hidden">
                         <Group orientation="horizontal" className="absolute inset-0">
                             {/* Left Sidebar */}

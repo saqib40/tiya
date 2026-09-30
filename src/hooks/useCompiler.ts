@@ -1,21 +1,52 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 interface CompileRequest {
     root: string;
     revision: number;
 }
 
-export function useCompiler(rootFile: string | null) {
+interface RunningBuild extends CompileRequest {
+    id: string;
+    cancelled: boolean;
+}
+
+interface CompileResult {
+    pdf_path: string;
+    log: string;
+}
+
+interface CompileEvent {
+    request_id: string;
+    kind: string;
+    message: string;
+}
+
+export function useCompiler(rootFile: string | null, automatic = true) {
     const [pdfPath, setPdfPath] = useState<string | null>(null);
     const [pdfRevision, setPdfRevision] = useState(0);
-    const [status, setStatus] = useState<'Ready' | 'Compiling...' | 'Error'>('Ready');
+    const [status, setStatus] = useState<'Ready' | 'Compiling...' | 'Error' | 'Cancelled' | 'Outdated'>('Ready');
     const [error, setError] = useState<string | null>(null);
+    const [log, setLog] = useState("");
     const rootRef = useRef(rootFile);
     const revision = useRef(0);
     const pending = useRef<CompileRequest | null>(null);
     const running = useRef(false);
     const mounted = useRef(false);
+    const active = useRef<RunningBuild | null>(null);
+    const automaticRef = useRef(automatic);
+
+    useEffect(() => { automaticRef.current = automatic; }, [automatic]);
+
+    const cancelActive = useCallback(() => {
+        const request = active.current;
+        if (!request) return;
+        request.cancelled = true;
+        void invoke("cancel_compile", { requestId: request.id }).catch(failure => {
+            if (mounted.current) setError(`Could not cancel the build: ${String(failure)}`);
+        });
+    }, []);
 
     const drain = useCallback(async () => {
         if (running.current) return;
@@ -24,25 +55,43 @@ export function useCompiler(rootFile: string | null) {
             while (pending.current && mounted.current) {
                 const request = pending.current;
                 pending.current = null;
+                const task: RunningBuild = { ...request, id: crypto.randomUUID(), cancelled: false };
+                active.current = task;
+                let unlisten: (() => void) | undefined;
                 try {
-                    const result = await invoke<string>("compile_preview", { filePath: request.root });
+                    unlisten = await listen<CompileEvent>("compile-output", ({ payload }) => {
+                        if (payload.request_id !== task.id) return;
+                        if (payload.kind === "started" && task.cancelled) cancelActive();
+                        if (mounted.current && task.revision === revision.current) {
+                            setLog(previous => `${previous}${payload.message}\n`.slice(-524_288));
+                        }
+                    });
+                    if (!mounted.current || task.cancelled) continue;
+                    setLog("");
+                    const result = await invoke<CompileResult>("compile_preview", { filePath: request.root, requestId: task.id });
                     if (mounted.current && request.revision === revision.current && request.root === rootRef.current) {
-                        setPdfPath(result);
+                        setPdfPath(result.pdf_path);
                         setPdfRevision(value => value + 1);
+                        setLog(result.log);
                         setError(null);
                         setStatus('Ready');
                     }
                 } catch (failure) {
                     if (mounted.current && request.revision === revision.current && request.root === rootRef.current) {
-                        setError(failure instanceof Error ? failure.message : String(failure));
+                        const message = failure instanceof Error ? failure.message : String(failure);
+                        setError(message);
+                        setLog(message);
                         setStatus('Error');
                     }
+                } finally {
+                    unlisten?.();
+                    if (active.current === task) active.current = null;
                 }
             }
         } finally {
             running.current = false;
         }
-    }, []);
+    }, [cancelActive]);
 
     const requestCompile = useCallback(() => {
         if (!rootRef.current || !mounted.current) return;
@@ -50,6 +99,19 @@ export function useCompiler(rootFile: string | null) {
         setStatus('Compiling...');
         void drain();
     }, [drain]);
+
+    const sourceSaved = useCallback(() => {
+        if (automaticRef.current) requestCompile();
+        else setStatus('Outdated');
+    }, [requestCompile]);
+
+    const cancelCompile = useCallback(() => {
+        revision.current += 1;
+        pending.current = null;
+        cancelActive();
+        setStatus('Cancelled');
+        setError(null);
+    }, [cancelActive]);
 
     useEffect(() => {
         mounted.current = true;
@@ -59,14 +121,16 @@ export function useCompiler(rootFile: string | null) {
         setPdfPath(null);
         setPdfRevision(0);
         setError(null);
+        setLog("");
         setStatus('Ready');
-        requestCompile();
+        if (automaticRef.current) requestCompile();
         return () => {
             mounted.current = false;
             revision.current += 1;
             pending.current = null;
+            cancelActive();
         };
-    }, [rootFile, requestCompile]);
+    }, [rootFile, requestCompile, cancelActive]);
 
-    return { pdfPath, pdfRevision, status, error, requestCompile };
+    return { pdfPath, pdfRevision, status, error, log, requestCompile, sourceSaved, cancelCompile };
 }

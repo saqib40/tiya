@@ -4,6 +4,7 @@ import App from "./App";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => vi.fn()) }));
 vi.mock("@tauri-apps/api/window", () => ({
     getCurrentWindow: () => ({ onCloseRequested: vi.fn(async () => vi.fn()), close: vi.fn() }),
 }));
@@ -40,7 +41,8 @@ describe("project compilation", () => {
                 return { path: "/project", root_file: "/project/main.tex", tex_files: ["/project/main.tex", "/project/chapter.tex"] };
             }
             if (command === "read_file_content") return "Root document";
-            if (command === "compile_preview") return "/project/main.pdf";
+            if (command === "compile_preview") return { pdf_path: "/project/main.pdf", log: "Success" };
+            if (command === "cancel_compile") return;
             if (command === "save_file") return;
             throw new Error(`Unexpected command: ${command}`);
         });
@@ -57,7 +59,7 @@ describe("project compilation", () => {
 
         expect(screen.getByText("PDF: /project/main.pdf")).toBeInTheDocument();
         const builds = invoke.mock.calls.filter(([command]) => command === "compile_preview");
-        expect(builds).toEqual([["compile_preview", { filePath: "/project/main.tex" }]]);
+        expect(builds).toEqual([["compile_preview", { filePath: "/project/main.tex", requestId: expect.any(String) }]]);
     });
 
     it("rebuilds the root after saving bibliography changes", async () => {
@@ -74,6 +76,6 @@ describe("project compilation", () => {
         });
         expect(invoke).toHaveBeenCalledWith("save_file", { path: "/project/references.bib", content: "Updated bibliography" });
         expect(invoke.mock.calls.filter(([command]) => command === "compile_preview").slice(-1)[0])
-            .toEqual(["compile_preview", { filePath: "/project/main.tex" }]);
+            .toEqual(["compile_preview", { filePath: "/project/main.tex", requestId: expect.any(String) }]);
     });
 });

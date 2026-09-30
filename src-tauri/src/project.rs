@@ -237,9 +237,21 @@ author={Example Author}, title={A Sample Paper}, journal={Sample Journal}, year=
         let binary = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("binaries")
             .join(binary_name);
+        let output_directory = directory.path().join(".tiya-build-test");
+        fs::create_dir(&output_directory).unwrap();
         let output = std::process::Command::new(binary)
             .current_dir(directory.path())
-            .args(["-X", "compile", "--keep-logs", "main.tex"])
+            .args([
+                "-X",
+                "compile",
+                "--keep-logs",
+                "--print",
+                "--synctex",
+                "--untrusted",
+                "--outdir",
+            ])
+            .arg(&output_directory)
+            .arg(directory.path().join("main.tex"))
             .output()
             .unwrap();
         assert!(
@@ -248,9 +260,10 @@ author={Example Author}, title={A Sample Paper}, journal={Sample Journal}, year=
             String::from_utf8_lossy(&output.stdout),
             String::from_utf8_lossy(&output.stderr)
         );
-        let pdf = fs::read(directory.path().join("main.pdf")).unwrap();
+        let pdf = fs::read(output_directory.join("main.pdf")).unwrap();
         assert!(pdf.starts_with(b"%PDF-"));
-        let log = fs::read_to_string(directory.path().join("main.log")).unwrap();
+        assert!(output_directory.join("main.synctex.gz").exists());
+        let log = fs::read_to_string(output_directory.join("main.log")).unwrap();
         assert!(!log.contains("There were undefined references"));
     }
 }
