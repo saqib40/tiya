@@ -15,17 +15,17 @@ We offer two editions of Tiya depending on your needs.
 * **Size:** 60 - 100MBs.
 * **Downloads:** 
   * **Windows**
-    * [**Standard** - Download this one](https://github.com/saqib40/tiya/releases/download/v0.1.0-sidecar/tiya_0.1.0_x64-setup.exe)
-    * [Enterprise/IT Installer](https://github.com/saqib40/tiya/releases/download/v0.1.0-sidecar/tiya_0.1.0_x64_en-US.msi)
+    * [**Standard** - Download this one](https://github.com/saqib40/tiya/releases/download/v0.2.0-sidecar/tiya_0.2.0_x64-setup.exe)
+    * [Enterprise/IT Installer](https://github.com/saqib40/tiya/releases/download/v0.2.0-sidecar/tiya_0.2.0_x64_en-US.msi)
 
   * **macOS**
-    * [**Standard** - For M1/M2/M3 chips](https://github.com/saqib40/tiya/releases/download/v0.1.0-sidecar/tiya_0.1.0_aarch64.dmg)
-    * [Manual/Binary compressed](https://github.com/saqib40/tiya/releases/download/v0.1.0-sidecar/tiya_aarch64.app.tar.gz)
+    * [**Standard** - For M1/M2/M3 chips](https://github.com/saqib40/tiya/releases/download/v0.2.0-sidecar/tiya_0.2.0_aarch64.dmg)
+    * [Manual/Binary compressed](https://github.com/saqib40/tiya/releases/download/v0.2.0-sidecar/tiya_aarch64.app.tar.gz)
 
   * **Linux**
-    * [**Ubuntu / Debian / Mint / Kali**](https://github.com/saqib40/tiya/releases/download/v0.1.0-sidecar/tiya_0.1.0_amd64.deb)
-    * [**Fedora / Red Hat / CentOS**](https://github.com/saqib40/tiya/releases/download/v0.1.0-sidecar/tiya-0.1.0-1.x86_64.rpm)
-    * [**Universal** - Works on any distro, no install needed](https://github.com/saqib40/tiya/releases/download/v0.1.0-sidecar/tiya_0.1.0_amd64.AppImage)
+    * [**Ubuntu / Debian / Mint / Kali**](https://github.com/saqib40/tiya/releases/download/v0.2.0-sidecar/tiya_0.2.0_amd64.deb)
+    * [**Fedora / Red Hat / CentOS**](https://github.com/saqib40/tiya/releases/download/v0.2.0-sidecar/tiya-0.2.0-1.x86_64.rpm)
+    * [**Universal** - Works on any distro, no install needed](https://github.com/saqib40/tiya/releases/download/v0.2.0-sidecar/tiya_0.2.0_amd64.AppImage)
 * **Internet Connection:** Standalone Edition of Tiya automatically downloads LaTeX packages and fonts (like `geometry` or `amsmath`) from the internet the **first time** you use them. Though once a package is downloaded, it is saved to your computer and works **offline forever**.
 
 ### ️2. Standard Edition (Pure clone of overleaf, uses pdflatex)
