@@ -10,6 +10,17 @@ import Home from "./components/Home";
 import TitleBar from "./components/TitleBar";
 
 type PipelineStatus = 'Ready' | 'Saving...' | 'Compiling...' | 'Error';
+function cleanError(raw: string): string {
+    const lines = raw.split('\n');
+    const useful = lines.filter(line =>
+        line.trim() !== '' &&
+        !line.toLowerCase().includes('fontconfig') &&
+        !line.toLowerCase().includes('compilation failed') &&
+        !line.toLowerCase().includes('halted on')
+    );
+    const main = useful.find(line => line.includes('.tex:'));
+    return main?.trim() || useful[0]?.trim() || 'Unknown LaTeX error';
+}
 
 function App() {
     const [projectPath, setProjectPath] = useState<string | null>(null);
@@ -18,6 +29,7 @@ function App() {
     const [pdfPath, setPdfPath] = useState<string | null>(null);
     const [pdfRevision, setPdfRevision] = useState<number>(0);
     const [status, setStatus] = useState<PipelineStatus>('Ready');
+    const [compileError, setCompileError] = useState<string | null>(null);
 
     const lastSavedContent = useRef<string | null>(null);
 
@@ -26,6 +38,7 @@ function App() {
         setActiveFileContent(content);
         lastSavedContent.current = content;
         setStatus('Ready');
+        setCompileError(null);
         // Reset preview when switching files
         setPdfPath(null);
         setPdfRevision(0);
@@ -50,11 +63,25 @@ function App() {
                 const result: string = await invoke("compile_preview", { filePath: path });
                 setPdfPath(result);
                 setPdfRevision(prev => prev + 1);
+                setCompileError(null);
             }
 
             setStatus('Ready');
-        } catch (error) {
+        } catch (error: unknown) {
             console.error("Pipeline failed:", error);
+            let raw: string;
+            if (typeof error === "string") {
+                raw = error;
+            } else if (error instanceof Error) {
+                raw = error.message;
+            } else {
+                try {
+                    raw = JSON.stringify(error) || String(error);
+                } catch {
+                    raw = String(error);
+                }
+            }
+            setCompileError(cleanError(raw));
             setStatus('Error');
         }
     }, []);
@@ -136,6 +163,7 @@ function App() {
                                         pdfPath={pdfPath}
                                         pdfRevision={pdfRevision}
                                         compiling={status === 'Compiling...'}
+                                        error={compileError}
                                     />
                                 </div>
                             </Panel>
