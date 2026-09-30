@@ -1,8 +1,11 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Inter Variable", sans-serif;
+}
+
 :root {
-  font-family: Inter, Avenir, Helvetica, Arial, sans-serif;
+  font-family: "Inter Variable", sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
