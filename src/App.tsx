@@ -1,15 +1,16 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
 import CodeEditor from "./components/CodeEditor";
+import { useDocuments } from "./hooks/useDocuments";
 
 import Home from "./components/Home";
 import TitleBar from "./components/TitleBar";
 
-type PipelineStatus = 'Ready' | 'Saving...' | 'Compiling...' | 'Error';
+type PipelineStatus = 'Ready' | 'Unsaved' | 'Saving...' | 'Compiling...' | 'Error';
 function cleanError(raw: string): string {
     const lines = raw.split('\n');
     const useful = lines.filter(line =>
@@ -24,49 +25,20 @@ function cleanError(raw: string): string {
 
 function App() {
     const [projectPath, setProjectPath] = useState<string | null>(null);
-    const [activeFileContent, setActiveFileContent] = useState<string | null>(null);
-    const [filePath, setFilePath] = useState<string>("");
     const [pdfPath, setPdfPath] = useState<string | null>(null);
     const [pdfRevision, setPdfRevision] = useState<number>(0);
-    const [status, setStatus] = useState<PipelineStatus>('Ready');
+    const [compileStatus, setCompileStatus] = useState<PipelineStatus>('Ready');
     const [compileError, setCompileError] = useState<string | null>(null);
 
-    const lastSavedContent = useRef<string | null>(null);
-
-    const handleFileSelect = (path: string, content: string) => {
-        setFilePath(path);
-        setActiveFileContent(content);
-        lastSavedContent.current = content;
-        setStatus('Ready');
-        setCompileError(null);
-        // Reset preview when switching files
-        setPdfPath(null);
-        setPdfRevision(0);
-        // Initial compilation (optional, but good for UX)
-        if (path.toLowerCase().endsWith(".tex")) {
-            handlePipeline(path, content);
-        }
-    };
-
-    const handlePipeline = useCallback(async (path: string, content: string) => {
-        if (!path || content === null) return;
-
-        setStatus('Saving...');
+    const handleCompile = useCallback(async (path: string) => {
+        if (!path.toLowerCase().endsWith(".tex")) return;
+        setCompileStatus('Compiling...');
         try {
-            // 1. Save to disk
-            await invoke("save_file", { path, content });
-            lastSavedContent.current = content;
-
-            // 2. Compile Preview (only if it's a LaTeX file)
-            if (path.toLowerCase().endsWith(".tex")) {
-                setStatus('Compiling...');
-                const result: string = await invoke("compile_preview", { filePath: path });
-                setPdfPath(result);
-                setPdfRevision(prev => prev + 1);
-                setCompileError(null);
-            }
-
-            setStatus('Ready');
+            const result: string = await invoke("compile_preview", { filePath: path });
+            setPdfPath(result);
+            setPdfRevision(prev => prev + 1);
+            setCompileError(null);
+            setCompileStatus('Ready');
         } catch (error: unknown) {
             console.error("Pipeline failed:", error);
             let raw: string;
@@ -82,32 +54,57 @@ function App() {
                 }
             }
             setCompileError(cleanError(raw));
-            setStatus('Error');
+            setCompileStatus('Error');
         }
     }, []);
 
-    // Automated Workflow Effect (Debounced)
-    useEffect(() => {
-        if (activeFileContent === null || !filePath) return;
+    const documents = useDocuments(handleCompile);
+    const filePath = documents.activePath;
+    const activeFileContent = documents.activeDocument?.content ?? null;
+    const status: PipelineStatus = documents.error ? 'Error' : documents.saving ? 'Saving...'
+        : documents.dirtyCount > 0 && compileStatus === 'Ready' ? 'Unsaved' : compileStatus;
 
-        // Skip if content hasn't changed from last save
-        if (activeFileContent === lastSavedContent.current) {
+    const handleFileSelect = async (path: string, content: string) => {
+        try {
+            await documents.flushAll();
+            documents.openDocument(path, content);
+            setPdfPath(null);
+            setPdfRevision(0);
+            setCompileError(null);
+            await handleCompile(path);
+        } catch {
             return;
         }
+    };
 
-        const timer = setTimeout(() => {
-            handlePipeline(filePath, activeFileContent);
-        }, 1000); // 1000ms debounce
+    const handleProjectSelect = async (path: string) => {
+        try {
+            await documents.flushAll();
+            documents.reset();
+            setPdfPath(null);
+            setPdfRevision(0);
+            setCompileError(null);
+            setCompileStatus('Ready');
+            setProjectPath(path);
+        } catch {
+            return;
+        }
+    };
 
-        return () => clearTimeout(timer);
-    }, [activeFileContent, filePath, handlePipeline]);
+    const handleSave = async () => {
+        try {
+            if (!await documents.saveDocument(filePath)) await handleCompile(filePath);
+        } catch {
+            return;
+        }
+    };
 
     return (
         <div className="h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden flex flex-col font-sans">
             <TitleBar />
 
             {!projectPath ? (
-                <Home onProjectSelect={setProjectPath} />
+                <Home onProjectSelect={handleProjectSelect} />
             ) : (
                 <>
                     <div className="flex-1 relative overflow-hidden">
@@ -116,7 +113,7 @@ function App() {
                             <Panel defaultSize={20} minSize={15}>
                                 <Sidebar
                                     initialPath={projectPath}
-                                    onProjectSelect={setProjectPath}
+                                    onProjectSelect={handleProjectSelect}
                                     onFileSelect={handleFileSelect}
                                 />
                             </Panel>
@@ -135,8 +132,8 @@ function App() {
                                         {activeFileContent !== null ? (
                                             <CodeEditor
                                                 code={activeFileContent}
-                                                onChange={(value) => setActiveFileContent(value || "")}
-                                                onSave={() => handlePipeline(filePath, activeFileContent)}
+                                                onChange={(value) => documents.updateDocument(filePath, value || "")}
+                                                onSave={handleSave}
                                             />
                                         ) : (
                                             <div className="h-full w-full flex flex-col items-center justify-center gap-8 select-none">
@@ -163,7 +160,7 @@ function App() {
                                         pdfPath={pdfPath}
                                         pdfRevision={pdfRevision}
                                         compiling={status === 'Compiling...'}
-                                        error={compileError}
+                                        error={documents.error || compileError}
                                     />
                                 </div>
                             </Panel>
