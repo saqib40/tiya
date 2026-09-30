@@ -5,6 +5,8 @@ use tauri::{Emitter, Window};
 use notify::{Watcher, RecursiveMode, RecommendedWatcher, Config};
 use std::sync::mpsc::channel;
 
+mod filesystem;
+
 #[derive(Serialize, Clone)]
 pub struct FileNode {
     name: String,
@@ -105,7 +107,7 @@ fn watch_directory(path: String, window: Window) {
 fn save_file(path: String, content: String) -> Result<(), String> {
     println!("Saving file to path: {}", path);
     println!("Content length: {} bytes", content.len());
-    fs::write(&path, &content).map_err(|e| {
+    filesystem::save_file(Path::new(&path), &content).map_err(|e| {
         println!("Error writing file: {}", e);
         e.to_string()
     })?;
@@ -116,7 +118,7 @@ fn save_file(path: String, content: String) -> Result<(), String> {
 #[tauri::command]
 fn create_file(path: String) -> Result<(), String> {
     println!("Creating file: {}", path);
-    fs::File::create(&path).map_err(|e| e.to_string())?;
+    filesystem::create_file(Path::new(&path)).map_err(|e| e.to_string())?;
     Ok(())
 }
 
