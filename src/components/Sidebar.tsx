@@ -725,7 +725,7 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, onAsset
                     <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">System Active</span>
                 </div>
-                <span className="text-[9px] font-mono text-slate-700">V0.2.0</span>
+                <span className="text-[9px] font-mono text-slate-700">V0.3.0</span>
             </div>
         </div>
     );
