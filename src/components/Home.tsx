@@ -1,12 +1,20 @@
 import { open } from '@tauri-apps/plugin-dialog';
+import { useState } from 'react';
+import { FolderOpen, X, Loader2 } from 'lucide-react';
 
 interface HomeProps {
-    onProjectSelect: (path: string) => void;
+    onProjectSelect: (path: string) => void | Promise<void>;
+    recentProjects?: string[];
+    onForgetProject?: (path: string) => void;
 }
 
-const Home = ({ onProjectSelect }: HomeProps) => {
+const Home = ({ onProjectSelect, recentProjects = [], onForgetProject }: HomeProps) => {
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const handleOpenProject = async () => {
         try {
+            setBusy(true);
+            setError(null);
             const selected = await open({
                 directory: true,
                 multiple: false,
@@ -14,36 +22,40 @@ const Home = ({ onProjectSelect }: HomeProps) => {
             });
 
             if (selected && typeof selected === 'string') {
-                onProjectSelect(selected);
+                await onProjectSelect(selected);
             }
         } catch (err) {
-            console.error('Failed to open directory:', err);
+            setError(String(err));
+        } finally {
+            setBusy(false);
         }
     };
 
     return (
-        <div
-            className="h-full w-full bg-slate-950 flex flex-col items-center justify-center relative overflow-hidden font-inter"
-            style={{
-                backgroundImage: 'radial-gradient(circle, #1e293b 1px, transparent 1px)',
-                backgroundSize: '48px 48px'
-            }}
-        >
-            <div className="z-10 flex flex-col items-center text-center px-6 animate-in fade-in duration-1000">
-                <h1 className="text-8xl font-black text-white mb-12 tracking-tighter">
-                    Tiya
-                </h1>
-
-                <button
-                    onClick={handleOpenProject}
-                    className="px-10 py-4 border border-slate-800 hover:border-white text-slate-400 hover:text-white rounded-full text-sm font-bold tracking-[0.2em] uppercase transition-all duration-500 hover:bg-white/5 active:scale-95"
-                >
+        <main className="min-h-0 w-full flex-1 overflow-auto bg-slate-950 px-6 py-10">
+            <div className="mx-auto max-w-3xl">
+                <header className="mb-8 flex items-center gap-4 border-b border-slate-800 pb-6">
+                    <img src={new URL('../../src-tauri/icons/128x128.png', import.meta.url).href} alt="" width={48} height={48} />
+                    <h1 className="text-3xl font-semibold text-white">Tiya</h1>
+                </header>
+                <button onClick={() => void handleOpenProject()} disabled={busy} className="mb-8 flex items-center gap-2 rounded border border-slate-600 px-4 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-50">
+                    {busy ? <Loader2 size={18} className="animate-spin" /> : <FolderOpen size={18} />}
                     Open Project Folder
                 </button>
+                {error && <p role="alert" className="mb-4 break-words text-sm text-red-300">{error}</p>}
+                <h2 className="mb-3 text-sm font-semibold text-slate-300">Recent projects</h2>
+                {recentProjects.length ? <ul className="divide-y divide-slate-800 border-y border-slate-800">
+                    {recentProjects.map(path => <li key={path} className="flex min-w-0 items-center gap-3 py-3">
+                        <FolderOpen size={18} className="shrink-0 text-emerald-400" />
+                        <button onClick={() => void onProjectSelect(path)} className="min-w-0 flex-1 text-left">
+                            <span className="block truncate text-sm text-slate-100">{path.split(/[/\\]/).pop()}</span>
+                            <span className="block truncate text-xs text-slate-500">{path}</span>
+                        </button>
+                        <button title="Remove from recent projects" aria-label={`Remove ${path} from recent projects`} onClick={() => onForgetProject?.(path)} className="shrink-0 p-2 text-slate-400"><X size={14} /></button>
+                    </li>)}
+                </ul> : <p className="text-sm text-slate-500">No recent projects</p>}
             </div>
-
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-blue-500/5 blur-[160px] rounded-full pointer-events-none" />
-        </div>
+        </main>
     );
 };
 

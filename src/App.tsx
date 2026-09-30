@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square, X } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square, X, House } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
 import CodeEditor from "./components/CodeEditor";
@@ -9,6 +9,7 @@ import { useDocuments } from "./hooks/useDocuments";
 import { useCompiler } from "./hooks/useCompiler";
 import { ProjectInfo, relativePath } from "./lib/project";
 import { Diagnostic, EditorLocation, parseDiagnostics } from "./lib/diagnostics";
+import { readWorkspace, rememberProject, rememberSession, saveWorkspace } from "./lib/workspace";
 
 import Home from "./components/Home";
 import TitleBar from "./components/TitleBar";
@@ -16,11 +17,13 @@ import TitleBar from "./components/TitleBar";
 type PipelineStatus = 'Ready' | 'Unsaved' | 'Saving...' | 'Compiling...' | 'Error' | 'Cancelled' | 'Outdated';
 
 function App() {
+    const [workspace, setWorkspace] = useState(readWorkspace);
+    const projectSelection = useRef(0);
     const [projectPath, setProjectPath] = useState<string | null>(null);
     const [rootFile, setRootFile] = useState<string | null>(null);
     const [texFiles, setTexFiles] = useState<string[]>([]);
     const [projectError, setProjectError] = useState<string | null>(null);
-    const [automaticCompile, setAutomaticCompile] = useState(true);
+    const automaticCompile = workspace.automaticCompile;
     const [editorLocation, setEditorLocation] = useState<EditorLocation | null>(null);
     const compiler = useCompiler(rootFile, automaticCompile);
     const documents = useDocuments(compiler.sourceSaved);
@@ -30,6 +33,20 @@ function App() {
     const status: PipelineStatus = documents.error ? 'Error' : documents.saving ? 'Saving...'
         : documents.dirtyCount > 0 && compiler.status === 'Ready' ? 'Unsaved' : compiler.status;
 
+    useEffect(() => {
+        try { saveWorkspace(workspace); }
+        catch (failure) { setProjectError(`Session preferences could not be stored: ${String(failure)}`); }
+    }, [workspace]);
+
+    useEffect(() => {
+        if (projectPath) setWorkspace(previous => rememberSession(previous, projectPath, Object.keys(documents.buffers), documents.activePath));
+    }, [projectPath, documents.buffers, documents.activePath]);
+
+    useEffect(() => {
+        if (workspace.lastProject) void handleProjectSelect(workspace.lastProject);
+        return () => { projectSelection.current += 1; };
+    }, []);
+
     const handleFileSelect = async (path: string, content: string) => {
         await documents.flushAll().catch(() => undefined);
         documents.openDocument(path, content);
@@ -37,19 +54,33 @@ function App() {
     };
 
     const handleProjectSelect = async (path: string) => {
+        const selection = ++projectSelection.current;
         try {
             await documents.flushAll();
             const project = await invoke<ProjectInfo>("load_project", { path });
-            const content = project.root_file
-                ? await invoke<string>("read_file_content", { path: project.root_file }) : null;
+            const session = workspace.sessions[project.path];
+            const candidates = [...new Set([project.root_file, ...(session?.files || [])].filter((file): file is string => Boolean(file)))];
+            const opened: Array<{ path: string; content: string }> = [];
+            for (const file of candidates) {
+                if (!project.root_file) continue;
+                try {
+                    const resolved = file === project.root_file ? file : await invoke<string>("resolve_project_file", { projectPath: project.path, rootFile: project.root_file, requestedPath: file });
+                    const content = await invoke<string>("read_file_content", { path: resolved });
+                    opened.push({ path: resolved, content });
+                } catch { continue; }
+            }
+            if (selection !== projectSelection.current) return;
             documents.reset();
             setProjectError(null);
             setProjectPath(project.path);
             setRootFile(project.root_file);
             setTexFiles(project.tex_files);
-            if (project.root_file && content !== null) documents.openDocument(project.root_file, content);
+            for (const file of opened) documents.openDocument(file.path, file.content);
+            const active = opened.find(file => file.path === session?.activeFile) || opened[0];
+            if (active) documents.openDocument(active.path, active.content);
+            setWorkspace(previous => rememberProject(previous, project.path));
         } catch (failure) {
-            setProjectError(String(failure));
+            if (selection === projectSelection.current) setProjectError(String(failure));
         }
     };
 
@@ -128,6 +159,18 @@ function App() {
         if (untracked || refreshed.some(Boolean)) compiler.sourceSaved();
     };
 
+    const closeProject = async () => {
+        try {
+            await documents.flushAll();
+            projectSelection.current += 1;
+            compiler.cancelCompile();
+            setRootFile(null);
+            setProjectPath(null);
+            documents.reset();
+            setWorkspace(previous => ({ ...previous, lastProject: null }));
+        } catch { return; }
+    };
+
     return (
         <div className="h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden flex flex-col font-sans">
             <TitleBar />
@@ -136,10 +179,11 @@ function App() {
             </div>}
 
             {!projectPath ? (
-                <Home onProjectSelect={handleProjectSelect} />
+                <Home onProjectSelect={handleProjectSelect} recentProjects={workspace.recentProjects} onForgetProject={path => setWorkspace(previous => ({ ...previous, recentProjects: previous.recentProjects.filter(project => project !== path) }))} />
             ) : (
                 <>
                     <div className="flex items-center gap-3 border-b border-white/5 bg-slate-900 px-4 py-2 text-xs">
+                        <button title="Close project" aria-label="Close project" onClick={() => void closeProject()} className="shrink-0 p-1 text-slate-300"><House size={16} /></button>
                         <label htmlFor="root-document" className="shrink-0 text-slate-400">Root document</label>
                         <select
                             id="root-document"
@@ -151,7 +195,7 @@ function App() {
                             {texFiles.map(path => <option key={path} value={path}>{relativePath(projectPath, path)}</option>)}
                         </select>
                         <label className="flex shrink-0 items-center gap-2">
-                            <input type="checkbox" checked={automaticCompile} onChange={event => setAutomaticCompile(event.target.checked)} />
+                            <input type="checkbox" checked={automaticCompile} onChange={event => setWorkspace(previous => ({ ...previous, automaticCompile: event.target.checked }))} />
                             Auto build
                         </label>
                         <button type="button" onClick={() => void handleBuild()} disabled={!rootFile} title="Build PDF" aria-label="Build PDF" className="p-1.5 text-emerald-400 disabled:opacity-40">

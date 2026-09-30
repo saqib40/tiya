@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
 import { parseDiagnostics } from "./lib/diagnostics";
+import { readWorkspace, rememberProject, saveWorkspace } from "./lib/workspace";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -38,11 +39,12 @@ vi.mock("./components/PDFPreview", () => ({
 
 describe("project compilation", () => {
     beforeEach(() => {
-        invoke.mockImplementation(async (command: string) => {
+        invoke.mockImplementation(async (command: string, payload?: { requestedPath?: string }) => {
             if (command === "load_project" || command === "set_project_root") {
                 return { path: "/project", root_file: "/project/main.tex", tex_files: ["/project/main.tex", "/project/chapter.tex"] };
             }
             if (command === "read_file_content") return "Root document";
+            if (command === "resolve_project_file") return payload?.requestedPath;
             if (command === "compile_preview") return { pdf_path: "/project/main.pdf", log: "Success" };
             if (command === "cancel_compile") return;
             if (command === "save_file") return;
@@ -120,5 +122,27 @@ describe("project compilation", () => {
         fireEvent.click(screen.getByRole("button", { name: "Open root" }));
         await screen.findByDisplayValue("Local root edit");
         expect(screen.getByRole("button", { name: "Use disk version" })).toBeInTheDocument();
+    });
+
+    it("restores the previous project's tabs and selected file", async () => {
+        saveWorkspace({ ...rememberProject(readWorkspace(), "/project"), sessions: {
+            "/project": { files: ["/project/main.tex", "/project/chapter.tex"], activeFile: "/project/chapter.tex" },
+        } });
+        render(<App />);
+        await screen.findByRole("tab", { name: "chapter.tex" });
+        expect(screen.getByRole("tab", { name: "chapter.tex" })).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "main.tex" })).toBeInTheDocument();
+    });
+
+    it("stores recent projects and remembers manual build mode", async () => {
+        render(<App />);
+        fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+        await screen.findByRole("tab", { name: "main.tex" });
+        fireEvent.click(screen.getByRole("checkbox", { name: "Auto build" }));
+        expect(readWorkspace().automaticCompile).toBe(false);
+        fireEvent.click(screen.getByRole("button", { name: "Close project" }));
+        await screen.findByRole("button", { name: "Open project" });
+        expect(readWorkspace().lastProject).toBeNull();
+        expect(readWorkspace().recentProjects).toEqual(["/project"]);
     });
 });
