@@ -198,4 +198,37 @@ describe("document save safety", () => {
         expect(result.current.activeDocument?.content).toBe("external edit");
         expect(result.current.dirtyCount).toBe(0);
     });
+
+    it("saves a dirty tab before closing it", async () => {
+        const { result } = renderHook(() => useDocuments(vi.fn()));
+        act(() => result.current.openDocument("/first.tex", "original"));
+        act(() => result.current.updateDocument("/first.tex", "edited"));
+        await act(async () => result.current.closeDocument("/first.tex"));
+        expect(invoke).toHaveBeenCalledWith("save_file", { path: "/first.tex", content: "edited", expectedContent: "original" });
+        expect(result.current.buffers["/first.tex"]).toBeUndefined();
+    });
+
+    it("keeps a tab open if its save fails", async () => {
+        const { result } = renderHook(() => useDocuments(vi.fn()));
+        act(() => result.current.openDocument("/first.tex", "original"));
+        act(() => result.current.updateDocument("/first.tex", "edited"));
+        invoke.mockRejectedValueOnce("Disk full");
+        await act(async () => { await expect(result.current.closeDocument("/first.tex")).rejects.toBe("Disk full"); });
+        expect(result.current.activeDocument?.content).toBe("edited");
+    });
+
+    it("does not close a reverted buffer until its in-flight write is corrected", async () => {
+        let finish!: () => void;
+        const { result } = renderHook(() => useDocuments(vi.fn()));
+        act(() => result.current.openDocument("/first.tex", "original"));
+        act(() => result.current.updateDocument("/first.tex", "temporary"));
+        invoke.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
+        await act(async () => { void result.current.saveDocument("/first.tex"); });
+        act(() => result.current.updateDocument("/first.tex", "original"));
+        let closing!: Promise<void>;
+        await act(async () => { closing = result.current.closeDocument("/first.tex"); });
+        await act(async () => { finish(); await closing; });
+        expect(invoke).toHaveBeenLastCalledWith("save_file", { path: "/first.tex", content: "original", expectedContent: "temporary" });
+        expect(result.current.buffers["/first.tex"]).toBeUndefined();
+    });
 });

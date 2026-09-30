@@ -293,9 +293,11 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeM
     const [error, setError] = useState<string | null>(null);
     const [rename, setRename] = useState<{ path: string; name: string } | null>(null);
     const onFilesChangedRef = useRef(onFilesChanged);
+    const openRevision = useRef(0);
     useEffect(() => { onFilesChangedRef.current = onFilesChanged; }, [onFilesChanged]);
 
     useEffect(() => {
+        openRevision.current += 1;
         setSelectedPath(null);
         setSelectedIsDir(false);
         setExpandedPaths(new Set());
@@ -393,9 +395,10 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeM
     }, [onProjectSelect]);
 
     const handleFileOpen = useCallback(async (path: string) => {
+        const revision = ++openRevision.current;
         try {
             const content: string = await invoke("read_file_content", { path });
-            onFileSelect(path, content);
+            if (revision === openRevision.current) onFileSelect(path, content);
         } catch (error) {
             console.error("Failed to read file:", error);
             setError(String(error));

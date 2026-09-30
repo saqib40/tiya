@@ -113,6 +113,19 @@ export function useDocuments(onSaved: (path: string) => void) {
         setError(null);
     }, [publish]);
 
+    const closeDocument = useCallback(async (path: string) => {
+        while (true) {
+            await pending.current.get(path);
+            const buffer = buffersRef.current[path];
+            if (!buffer || buffer.content === buffer.savedContent) break;
+            await saveDocument(path);
+        }
+        const next = { ...buffersRef.current };
+        delete next[path];
+        publish(next);
+        setActivePath(active => active === path ? Object.keys(next)[0] ?? "" : active);
+    }, [saveDocument, publish]);
+
     const refreshDocument = useCallback(async (path: string) => {
         await pending.current.get(path)?.catch(() => undefined);
         if (!buffersRef.current[path]) return true;
@@ -199,6 +212,7 @@ export function useDocuments(onSaved: (path: string) => void) {
         reset,
         relocateDocuments,
         removeDocuments,
+        closeDocument,
         refreshDocument,
         resolveConflict,
     };

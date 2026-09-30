@@ -9,12 +9,17 @@ interface CodeEditorProps {
     onChange: (value: string | undefined) => void;
     onSave?: () => void;
     location?: EditorLocation | null;
+    path?: string;
+    openPaths?: string[];
 }
 
-const CodeEditor = ({ code, onChange, onSave, location }: CodeEditorProps) => {
+const CodeEditor = ({ code, onChange, onSave, location, path = "untitled.tex", openPaths }: CodeEditorProps) => {
     const editorRef = useRef<any>(null);
+    const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
+    const modelPaths = useRef(new Set<string>());
     const onSaveRef = useRef(onSave);
     const [isPasting, setIsPasting] = useState(false);
+    const [pasteError, setPasteError] = useState<string | null>(null);
     const locationRef = useRef(location);
 
     const revealLocation = (target: EditorLocation | null | undefined) => {
@@ -32,6 +37,23 @@ const CodeEditor = ({ code, onChange, onSave, location }: CodeEditorProps) => {
     useEffect(() => {
         onSaveRef.current = onSave;
     }, [onSave]);
+
+    useEffect(() => { modelPaths.current.add(path); }, [path]);
+    useEffect(() => {
+        const monaco = monacoRef.current;
+        if (!monaco || !openPaths) return;
+        for (const modelPath of modelPaths.current) {
+            if (modelPath !== path && !openPaths.includes(modelPath)) {
+                monaco.editor.getModel(monaco.Uri.parse(modelPath))?.dispose();
+                modelPaths.current.delete(modelPath);
+            }
+        }
+    }, [openPaths, path]);
+    useEffect(() => () => {
+        const monaco = monacoRef.current;
+        if (!monaco) return;
+        for (const modelPath of modelPaths.current) monaco.editor.getModel(monaco.Uri.parse(modelPath))?.dispose();
+    }, []);
 
     const handleEditorWillMount: BeforeMount = (monaco) => {
         // Explicitly Register the LaTeX language inside the component
@@ -94,41 +116,24 @@ const CodeEditor = ({ code, onChange, onSave, location }: CodeEditorProps) => {
 
     const handleEditorDidMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
+        monacoRef.current = monaco;
         revealLocation(locationRef.current);
 
         // Unified Paste Handler (Tauri System Clipboard + Anti-Freeze UX)
         const performPaste = async () => {
+            const model = editor.getModel();
+            const selection = editor.getSelection();
             try {
-                // 1. Show Loader
                 setIsPasting(true);
-
-                // 2. Fetch the text directly from the OS (Essential for Windows -> WSL)
+                setPasteError(null);
                 const text = await readText();
-
-                if (!text) {
-                    setIsPasting(false);
-                    return;
-                }
-
-                // 3. Defer insertion to allow the loader to render
-                setTimeout(() => {
-                    const selection = editor.getSelection();
-                    if (!selection) {
-                        setIsPasting(false);
-                        return;
-                    }
-
-                    const op = {
-                        range: selection,
-                        text: text,
-                        forceMoveMarkers: true
-                    };
-
-                    editor.executeEdits("tauri-paste", [op]);
-                    setIsPasting(false);
-                }, 100);
+                if (!text || !selection || !model || model.isDisposed() || editor.getModel() !== model) return;
+                editor.pushUndoStop();
+                editor.executeEdits("tauri-paste", [{ range: selection, text, forceMoveMarkers: true }]);
+                editor.pushUndoStop();
             } catch (err) {
-                console.error("Clipboard read failed:", err);
+                setPasteError(`Clipboard unavailable: ${String(err)}`);
+            } finally {
                 setIsPasting(false);
             }
         };
@@ -154,35 +159,29 @@ const CodeEditor = ({ code, onChange, onSave, location }: CodeEditorProps) => {
         });
     };
 
-    // "Anti-Freeze" Sync Guard Logic (Keeps parent and child in balance)
-    useEffect(() => {
-        if (editorRef.current) {
-            const currentContent = editorRef.current.getValue();
-            if (currentContent !== code) {
-                editorRef.current.setValue(code);
-            }
-        }
-    }, [code]);
-
     return (
         <div className="h-full min-h-0 w-full flex-1 relative overflow-hidden bg-slate-950">
+            {pasteError && <div role="alert" className="absolute bottom-0 left-0 right-0 z-50 break-words bg-red-950 px-3 py-2 text-xs text-red-200">{pasteError}</div>}
             {/* Pasting Overlay */}
             {isPasting && (
                 <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3">
                     <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
                     <div className="flex flex-col items-center gap-1">
-                        <span className="text-slate-200 font-bold text-sm">Pasting large content...</span>
-                        <span className="text-slate-500 text-xs">Optimizing editor state</span>
+                          <span className="text-slate-200 font-bold text-sm">Pasting...</span>
                     </div>
                 </div>
             )}
 
             <Editor
                 height="100%"
+                path={path}
+                keepCurrentModel
+                saveViewState
                 defaultLanguage="latex"
                 language="latex"
                 theme="vs-dark"
                 defaultValue={code}
+                value={code}
                 onChange={onChange}
                 beforeMount={handleEditorWillMount}
                 onMount={handleEditorDidMount}
@@ -200,10 +199,10 @@ const CodeEditor = ({ code, onChange, onSave, location }: CodeEditorProps) => {
                     renderLineHighlight: 'all',
                     cursorBlinking: 'smooth',
                     scrollbar: {
-                        vertical: 'hidden',
-                        horizontal: 'hidden',
-                        verticalScrollbarSize: 0,
-                        horizontalScrollbarSize: 0,
+                        vertical: 'auto',
+                        horizontal: 'auto',
+                        verticalScrollbarSize: 10,
+                        horizontalScrollbarSize: 10,
                     }
                 }}
             />

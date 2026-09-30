@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square, X } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
 import CodeEditor from "./components/CodeEditor";
@@ -31,13 +31,7 @@ function App() {
         : documents.dirtyCount > 0 && compiler.status === 'Ready' ? 'Unsaved' : compiler.status;
 
     const handleFileSelect = async (path: string, content: string) => {
-        try {
-            await documents.flushAll();
-        } catch {
-            documents.openDocument(path, content);
-            setEditorLocation(null);
-            return;
-        }
+        await documents.flushAll().catch(() => undefined);
         documents.openDocument(path, content);
         setEditorLocation(null);
     };
@@ -201,10 +195,13 @@ function App() {
                             {/* Middle Editor Area */}
                             <Panel defaultSize={40} minSize={20}>
                                 <div className="h-full w-full flex flex-col border-r border-white/5 bg-slate-950">
-                                    <div className="px-4 py-3 bg-slate-900/50 border-b border-white/5 flex items-center justify-between">
-                                        <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest truncate">
-                                            {filePath ? relativePath(projectPath, filePath) : "No file selected"}
-                                        </div>
+                                    <div role="tablist" aria-label="Open files" className="flex shrink-0 overflow-x-auto border-b border-white/5 bg-slate-900/50">
+                                        {Object.values(documents.buffers).map(buffer => <div key={buffer.path} className={`flex shrink-0 items-center border-r border-slate-800 ${buffer.path === filePath ? 'bg-slate-800' : ''}`}>
+                                            <button role="tab" aria-selected={buffer.path === filePath} onClick={() => void handleFileSelect(buffer.path, buffer.content)} title={buffer.path} className="max-w-48 truncate px-3 py-2 text-xs text-slate-200">
+                                                {relativePath(projectPath, buffer.path)}{buffer.content !== buffer.savedContent ? ' *' : ''}{buffer.externalContent !== undefined ? ' !' : ''}
+                                            </button>
+                                            <button title={`Close ${relativePath(projectPath, buffer.path)}`} aria-label={`Close ${relativePath(projectPath, buffer.path)}`} onClick={() => void documents.closeDocument(buffer.path).catch(() => undefined)} className="p-2 text-slate-400 hover:text-white"><X size={12} /></button>
+                                        </div>)}
                                     </div>
                                     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                                         {documents.activeDocument?.externalContent !== undefined && <div className="max-h-48 overflow-auto border-b border-amber-800 bg-amber-950 px-3 py-2 text-xs text-amber-100">
@@ -217,6 +214,9 @@ function App() {
                                         </div>}
                                         {activeFileContent !== null ? (
                                             <CodeEditor
+                                                key={projectPath}
+                                                path={filePath}
+                                                openPaths={Object.keys(documents.buffers)}
                                                 code={activeFileContent}
                                                 onChange={(value) => documents.updateDocument(filePath, value || "")}
                                                 onSave={handleSave}
