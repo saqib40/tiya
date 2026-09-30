@@ -103,6 +103,24 @@ function App() {
         }
     };
 
+    const handleMutation = async (source: string, destination: string | null) => {
+        if (!projectPath) return;
+        if (destination) documents.relocateDocuments(source, destination);
+        else documents.removeDocuments(source);
+        const affectsRoot = rootFile && (rootFile === source || rootFile.startsWith(`${source}/`) || rootFile.startsWith(`${source}\\`));
+        if (affectsRoot && destination) {
+            const nextRoot = `${destination}${rootFile.slice(source.length)}`;
+            const project = await invoke<ProjectInfo>("set_project_root", { projectPath, filePath: nextRoot });
+            setRootFile(project.root_file);
+            setTexFiles(project.tex_files);
+        } else {
+            const project = await invoke<ProjectInfo>("load_project", { path: projectPath });
+            setRootFile(project.root_file);
+            setTexFiles(project.tex_files);
+        }
+        compiler.sourceSaved();
+    };
+
     return (
         <div className="h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden flex flex-col font-sans">
             <TitleBar />
@@ -158,6 +176,8 @@ function App() {
                                     initialPath={projectPath}
                                     onProjectSelect={handleProjectSelect}
                                     onFileSelect={handleFileSelect}
+                                    beforeMutation={documents.flushAll}
+                                    onMutation={handleMutation}
                                 />
                             </Panel>
 

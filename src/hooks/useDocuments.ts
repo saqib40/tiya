@@ -86,6 +86,26 @@ export function useDocuments(onSaved: (path: string) => void) {
         setError(null);
     }, [publish]);
 
+    const relocateDocuments = useCallback((source: string, destination: string) => {
+        const relocated = (path: string) => path === source || path.startsWith(`${source}/`) || path.startsWith(`${source}\\`)
+            ? `${destination}${path.slice(source.length)}` : path;
+        const next: Record<string, DocumentBuffer> = {};
+        for (const buffer of Object.values(buffersRef.current)) {
+            const path = relocated(buffer.path);
+            next[path] = { ...buffer, path };
+        }
+        publish(next);
+        setActivePath(path => relocated(path));
+    }, [publish]);
+
+    const removeDocuments = useCallback((source: string) => {
+        const next = Object.fromEntries(Object.entries(buffersRef.current).filter(([path]) =>
+            path !== source && !path.startsWith(`${source}/`) && !path.startsWith(`${source}\\`)));
+        publish(next);
+        setActivePath(path => next[path] ? path : Object.keys(next)[0] ?? "");
+        setError(null);
+    }, [publish]);
+
     useEffect(() => {
         if (!Object.values(buffers).some(buffer => buffer.content !== buffer.savedContent)) return;
         const timer = setTimeout(() => {
@@ -138,5 +158,7 @@ export function useDocuments(onSaved: (path: string) => void) {
         saveDocument,
         flushAll,
         reset,
+        relocateDocuments,
+        removeDocuments,
     };
 }

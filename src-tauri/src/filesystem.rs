@@ -7,6 +7,47 @@ pub fn create_file(path: &Path) -> io::Result<()> {
     Ok(())
 }
 
+pub fn move_node(source: &Path, destination: &Path) -> io::Result<()> {
+    match fs::symlink_metadata(destination) {
+        Ok(_) => {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                "A file or folder already exists at the destination",
+            ))
+        }
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    let metadata = fs::symlink_metadata(source)?;
+    if metadata.file_type().is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Move symbolic links with your system file manager",
+        ));
+    }
+    let parent = fs::canonicalize(
+        destination
+            .parent()
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid destination"))?,
+    )?;
+    if metadata.is_dir() && parent.starts_with(fs::canonicalize(source)?) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "A folder cannot be moved into itself",
+        ));
+    }
+    if metadata.is_file() {
+        fs::hard_link(source, destination)?;
+        if let Err(error) = fs::remove_file(source) {
+            let _ = fs::remove_file(destination);
+            return Err(error);
+        }
+        Ok(())
+    } else {
+        fs::rename(source, destination)
+    }
+}
+
 pub fn save_file(path: &Path, content: &str) -> io::Result<()> {
     let target = fs::canonicalize(path)?;
     let metadata = fs::metadata(&target)?;
@@ -44,6 +85,44 @@ pub fn save_file(path: &Path, content: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn moving_a_file_never_overwrites_an_existing_destination() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("first.tex");
+        let destination = directory.path().join("second.tex");
+        fs::write(&source, "first document").unwrap();
+        fs::write(&destination, "second document").unwrap();
+        assert_eq!(
+            move_node(&source, &destination).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(fs::read_to_string(source).unwrap(), "first document");
+        assert_eq!(fs::read_to_string(destination).unwrap(), "second document");
+    }
+
+    #[test]
+    fn renaming_preserves_content_and_removes_the_old_path() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("first.tex");
+        let destination = directory.path().join("renamed.tex");
+        fs::write(&source, "document").unwrap();
+        move_node(&source, &destination).unwrap();
+        assert!(!source.exists());
+        assert_eq!(fs::read_to_string(destination).unwrap(), "document");
+    }
+
+    #[test]
+    fn rejects_moving_a_folder_into_itself() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::create_dir(directory.path().join("nested")).unwrap();
+        assert_eq!(
+            move_node(directory.path(), &directory.path().join("nested/child"))
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+    }
 
     #[test]
     fn duplicate_creation_preserves_existing_content() {

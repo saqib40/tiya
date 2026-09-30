@@ -143,4 +143,24 @@ describe("document save safety", () => {
         expect(result.current.dirtyCount).toBe(1);
         expect(result.current.error).toContain("Window kept open");
     });
+
+    it("moves descendant buffers to their new paths without losing edits", () => {
+        const { result } = renderHook(() => useDocuments(vi.fn()));
+        act(() => result.current.openDocument("/project/chapters/intro.tex", "original"));
+        act(() => result.current.updateDocument("/project/chapters/intro.tex", "edited"));
+        act(() => result.current.relocateDocuments("/project/chapters", "/project/sections"));
+        expect(result.current.activePath).toBe("/project/sections/intro.tex");
+        expect(result.current.activeDocument?.content).toBe("edited");
+        expect(result.current.buffers["/project/chapters/intro.tex"]).toBeUndefined();
+    });
+
+    it("removes deleted buffers so autosave cannot resurrect them", async () => {
+        const { result } = renderHook(() => useDocuments(vi.fn()));
+        act(() => result.current.openDocument("/project/main.tex", "original"));
+        act(() => result.current.updateDocument("/project/main.tex", "edited"));
+        act(() => result.current.removeDocuments("/project/main.tex"));
+        await act(() => vi.advanceTimersByTimeAsync(1000));
+        expect(invoke).not.toHaveBeenCalled();
+        expect(result.current.activePath).toBe("");
+    });
 });

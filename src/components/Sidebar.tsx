@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from "react";
-import { Folder, Plus, FileText, FilePlus, FolderPlus, Trash2, ChevronRight, ChevronDown, Loader2 } from "lucide-react";
-import { open } from "@tauri-apps/plugin-dialog";
+import { Folder, Plus, FileText, FilePlus, FolderPlus, Trash2, ChevronRight, ChevronDown, Loader2, Pencil, X, Check } from "lucide-react";
+import { open, confirm } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { cn } from "../lib/utils";
@@ -16,6 +16,16 @@ interface SidebarProps {
     initialPath?: string | null;
     onProjectSelect: (path: string) => void;
     onFileSelect: (path: string, content: string) => void;
+    beforeMutation?: () => Promise<void>;
+    onMutation?: (source: string, destination: string | null) => Promise<void>;
+}
+
+export function itemName(input: string, latexDefault = false) {
+    const name = input.trim();
+    if (!name || name === "." || name === ".." || /[\\/<>:"|?*\x00-\x1f]/.test(name) || name.endsWith(".") || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(name)) {
+        throw new Error("Enter a valid file or folder name");
+    }
+    return latexDefault && !name.includes(".") ? `${name}.tex` : name;
 }
 
 interface NewItemState {
@@ -268,7 +278,7 @@ const FileTreeItem = memo(({
 
 FileTreeItem.displayName = "FileTreeItem";
 
-const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) => {
+const Sidebar = ({ initialPath, onProjectSelect, onFileSelect, beforeMutation, onMutation }: SidebarProps) => {
     const [rootFiles, setRootFiles] = useState<FileNode[]>([]);
     const [selectedPath, setSelectedPath] = useState<string | null>(null);
     const [selectedIsDir, setSelectedIsDir] = useState(false);
@@ -278,6 +288,18 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
     const [newItem, setNewItem] = useState<NewItemState | null>(null);
     const [dragTargetId, setDragTargetId] = useState<string | null>(null);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [error, setError] = useState<string | null>(null);
+    const [rename, setRename] = useState<{ path: string; name: string } | null>(null);
+
+    useEffect(() => {
+        setSelectedPath(null);
+        setSelectedIsDir(false);
+        setExpandedPaths(new Set());
+        setNewItem(null);
+        setRename(null);
+        setError(null);
+        setRootFiles([]);
+    }, [initialPath]);
 
     const loadRoot = useCallback(async (path: string) => {
         setLoading(true);
@@ -295,6 +317,7 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
             }));
         } catch (error) {
             console.error("Failed to open root directory:", error);
+            setError(String(error));
         } finally {
             setLoading(false);
         }
@@ -347,6 +370,7 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
             }
         } catch (error) {
             console.error("Failed to open directory picker:", error);
+            setError(String(error));
         }
     }, [onProjectSelect]);
 
@@ -356,6 +380,7 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
             onFileSelect(path, content);
         } catch (error) {
             console.error("Failed to read file:", error);
+            setError(String(error));
         }
     }, [onFileSelect]);
 
@@ -380,40 +405,45 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
             return;
         }
 
-        const finalPath = `${newItem.parentPath}/${name}`;
-
         try {
+            const fileName = itemName(name, newItem.type === 'file');
+            const finalPath = `${newItem.parentPath}/${fileName}`;
+            setError(null);
             if (newItem.type === 'file') {
-                const fileName = name.endsWith('.tex') ? name : `${name}.tex`;
-                await invoke("create_file", { path: `${newItem.parentPath}/${fileName}` });
+                await invoke("create_file", { path: finalPath });
             } else {
                 await invoke("create_directory", { path: finalPath });
             }
+            await onMutation?.(finalPath, finalPath);
 
             // Trigger deep refresh
             setRefreshKey(prev => prev + 1);
         } catch (error) {
             console.error("Creation failed:", error);
+            setError(String(error));
         } finally {
             setNewItem(null);
         }
-    }, [newItem, initialPath]);
+    }, [newItem, initialPath, onMutation]);
 
     const handleDelete = useCallback(async () => {
         if (!selectedPath || !initialPath) return;
 
         const fileName = selectedPath.split(/[/\\]/).pop();
-        if (window.confirm(`Are you sure you want to delete "${fileName}"?`)) {
-            try {
+        try {
+            if (await confirm(`Move "${fileName}" to Trash?`, { title: "Move to Trash", kind: "warning" })) {
+                await beforeMutation?.();
+                setError(null);
                 await invoke("delete_node", { path: selectedPath });
+                await onMutation?.(selectedPath, null);
                 setSelectedPath(null);
                 // Trigger deep refresh
                 setRefreshKey(prev => prev + 1);
-            } catch (error) {
-                console.error("Deletion failed:", error);
             }
+        } catch (error) {
+            setError(String(error));
         }
-    }, [selectedPath, initialPath]);
+    }, [selectedPath, initialPath, beforeMutation, onMutation]);
 
     const handleMove = useCallback(async (source: string, targetFolder: string) => {
         if (!initialPath) return;
@@ -426,13 +456,38 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
         if (source === destination) return;
 
         try {
+            await beforeMutation?.();
+            setError(null);
             await invoke("move_node", { source, destination });
+            await onMutation?.(source, destination);
             // Trigger deep refresh
             setRefreshKey(prev => prev + 1);
         } catch (error) {
             console.error("Move failed:", error);
+            setError(String(error));
         }
-    }, [initialPath]);
+    }, [initialPath, beforeMutation, onMutation]);
+
+    const handleRename = async (event: React.FormEvent) => {
+        event.preventDefault();
+        if (!rename) return;
+        try {
+            const name = itemName(rename.name);
+            const parent = rename.path.slice(0, Math.max(rename.path.lastIndexOf('/'), rename.path.lastIndexOf('\\')));
+            const destination = `${parent}/${name}`;
+            if (destination !== rename.path) {
+                await beforeMutation?.();
+                await invoke("move_node", { source: rename.path, destination });
+                await onMutation?.(rename.path, destination);
+                setSelectedPath(destination);
+                setRefreshKey(value => value + 1);
+            }
+            setRename(null);
+            setError(null);
+        } catch (failure) {
+            setError(String(failure));
+        }
+    };
 
     const handleToggleExpand = useCallback((path: string) => {
         setExpandedPaths(prev => {
@@ -491,7 +546,7 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
                     <button
                         onClick={() => handleNewItemInit('file')}
                         className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition-colors rounded-sm"
-                        title="New File (.tex)"
+                        title="New File"
                     >
                         <FilePlus size={14} />
                     </button>
@@ -503,10 +558,20 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
                         <FolderPlus size={14} />
                     </button>
                     <button
+                        onClick={() => selectedPath && setRename({ path: selectedPath, name: selectedPath.split(/[/\\]/).pop() || "" })}
+                        disabled={!selectedPath}
+                        title="Rename"
+                        aria-label="Rename"
+                        className="p-1.5 text-slate-400 hover:text-white disabled:opacity-20"
+                    >
+                        <Pencil size={14} />
+                    </button>
+                    <button
                         onClick={handleDelete}
                         disabled={!selectedPath}
                         className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-red-400 transition-colors rounded-sm disabled:opacity-20 disabled:cursor-not-allowed"
-                        title="Delete"
+                        title="Move to Trash"
+                        aria-label="Move to Trash"
                     >
                         <Trash2 size={14} />
                     </button>
@@ -514,6 +579,12 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect }: SidebarProps) =
             </div>
 
             {/* Root Action / Project Picker */}
+            {error && <div role="alert" className="mx-3 mb-3 break-words text-xs text-red-300">{error}</div>}
+            {rename && <form onSubmit={event => void handleRename(event)} className="mx-3 mb-3 flex min-w-0 items-center gap-1">
+                <input aria-label="New name" autoFocus value={rename.name} onChange={event => setRename({ ...rename, name: event.target.value })} onKeyDown={event => { if (event.key === 'Escape') setRename(null); }} className="min-w-0 flex-1 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs" />
+                <button type="submit" title="Apply rename" aria-label="Apply rename" className="p-1"><Check size={14} /></button>
+                <button type="button" title="Cancel rename" aria-label="Cancel rename" onClick={() => setRename(null)} className="p-1"><X size={14} /></button>
+            </form>}
             <div className="px-3 mb-4">
                 <button
                     onClick={handleOpenProject}

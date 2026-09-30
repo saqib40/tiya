@@ -121,20 +121,13 @@ fn create_directory(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn delete_node(path: String) -> Result<(), String> {
-    println!("Deleting node: {}", path);
-    let path_buf = Path::new(&path);
-    if path_buf.is_dir() {
-        fs::remove_dir_all(path_buf).map_err(|e| e.to_string())?;
-    } else {
-        fs::remove_file(path_buf).map_err(|e| e.to_string())?;
-    }
-    Ok(())
+    trash::delete(path).map_err(|error| format!("Could not move the item to Trash: {error}"))
 }
 
 #[tauri::command]
 fn move_node(source: String, destination: String) -> Result<(), String> {
     println!("Moving node from {} to {}", source, destination);
-    fs::rename(source, destination).map_err(|e| e.to_string())?;
+    filesystem::move_node(Path::new(&source), Path::new(&destination)).map_err(|e| e.to_string())?;
     Ok(())
 }
 
