@@ -204,6 +204,10 @@ function App() {
                                         </div>)}
                                     </div>
                                     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                                        {documents.activeDocument?.recovered && <div role="status" className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-800 bg-emerald-950 px-3 py-2 text-xs text-emerald-100">
+                                            <span>Unsaved edits recovered</span>
+                                            <button title="Dismiss recovery notice" aria-label="Dismiss recovery notice" onClick={() => documents.dismissRecovery(filePath)}><X size={14} /></button>
+                                        </div>}
                                         {documents.activeDocument?.externalContent !== undefined && <div className="max-h-48 overflow-auto border-b border-amber-800 bg-amber-950 px-3 py-2 text-xs text-amber-100">
                                             <div className="mb-2">File changed on disk</div>
                                             <div className="flex flex-wrap gap-3">

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { journalDrafts, recoveredDraft } from "../lib/recovery";
 
 export interface DocumentBuffer {
     path: string;
     content: string;
     savedContent: string;
     externalContent?: string;
+    recovered?: boolean;
 }
 
 export function useDocuments(onSaved: (path: string) => void) {
@@ -23,13 +25,22 @@ export function useDocuments(onSaved: (path: string) => void) {
     }, [onSaved]);
 
     const publish = useCallback((next: Record<string, DocumentBuffer>) => {
+        try {
+            journalDrafts(next, Object.keys(buffersRef.current));
+        } catch (failure) {
+            setError(`Recovery storage is unavailable. Save your work to disk: ${String(failure)}`);
+        }
         buffersRef.current = next;
         setBuffers(next);
     }, []);
 
     const openDocument = useCallback((path: string, content: string) => {
         if (!buffersRef.current[path]) {
-            publish({ ...buffersRef.current, [path]: { path, content, savedContent: content } });
+            const draft = recoveredDraft(path);
+            const buffer: DocumentBuffer = draft && draft.content !== content
+                ? { path, content: draft.content, savedContent: draft.savedContent, externalContent: draft.savedContent !== content ? content : undefined, recovered: true }
+                : { path, content, savedContent: content };
+            publish({ ...buffersRef.current, [path]: buffer });
         }
         setActivePath(path);
     }, [publish]);
@@ -154,8 +165,14 @@ export function useDocuments(onSaved: (path: string) => void) {
             content: choice === 'disk' ? current.externalContent : current.content,
             savedContent: current.externalContent,
             externalContent: undefined,
+            recovered: false,
         } });
         setError(null);
+    }, [publish]);
+
+    const dismissRecovery = useCallback((path: string) => {
+        const buffer = buffersRef.current[path];
+        if (buffer) publish({ ...buffersRef.current, [path]: { ...buffer, recovered: false } });
     }, [publish]);
 
     useEffect(() => {
@@ -215,5 +232,6 @@ export function useDocuments(onSaved: (path: string) => void) {
         closeDocument,
         refreshDocument,
         resolveConflict,
+        dismissRecovery,
     };
 }

@@ -231,4 +231,43 @@ describe("document save safety", () => {
         expect(invoke).toHaveBeenLastCalledWith("save_file", { path: "/first.tex", content: "original", expectedContent: "temporary" });
         expect(result.current.buffers["/first.tex"]).toBeUndefined();
     });
+
+    it("recovers an unsaved draft after the document manager restarts", () => {
+        const first = renderHook(() => useDocuments(vi.fn()));
+        act(() => first.result.current.openDocument("/first.tex", "original"));
+        act(() => first.result.current.updateDocument("/first.tex", "unsaved manuscript"));
+        first.unmount();
+        const reopened = renderHook(() => useDocuments(vi.fn()));
+        act(() => reopened.result.current.openDocument("/first.tex", "original"));
+        expect(reopened.result.current.activeDocument?.content).toBe("unsaved manuscript");
+        expect(reopened.result.current.activeDocument?.recovered).toBe(true);
+        expect(reopened.result.current.activeDocument?.externalContent).toBeUndefined();
+    });
+
+    it("requires a conflict choice if a recovered draft has a different disk base", () => {
+        const first = renderHook(() => useDocuments(vi.fn()));
+        act(() => first.result.current.openDocument("/first.tex", "original"));
+        act(() => first.result.current.updateDocument("/first.tex", "local manuscript"));
+        first.unmount();
+        const reopened = renderHook(() => useDocuments(vi.fn()));
+        act(() => reopened.result.current.openDocument("/first.tex", "changed externally"));
+        expect(reopened.result.current.activeDocument?.content).toBe("local manuscript");
+        expect(reopened.result.current.activeDocument?.externalContent).toBe("changed externally");
+        reopened.unmount();
+        const restarted = renderHook(() => useDocuments(vi.fn()));
+        act(() => restarted.result.current.openDocument("/first.tex", "changed externally"));
+        expect(restarted.result.current.activeDocument?.externalContent).toBe("changed externally");
+    });
+
+    it("removes recovery drafts only after a successful save", async () => {
+        const first = renderHook(() => useDocuments(vi.fn()));
+        act(() => first.result.current.openDocument("/first.tex", "original"));
+        act(() => first.result.current.updateDocument("/first.tex", "saved manuscript"));
+        await act(async () => first.result.current.flushAll());
+        first.unmount();
+        const reopened = renderHook(() => useDocuments(vi.fn()));
+        act(() => reopened.result.current.openDocument("/first.tex", "saved manuscript"));
+        expect(reopened.result.current.activeDocument?.recovered).toBeUndefined();
+        expect(localStorage.getItem("tiya.recovery.v1")).toBeNull();
+    });
 });
