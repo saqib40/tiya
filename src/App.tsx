@@ -174,6 +174,7 @@ function App() {
                             <Panel defaultSize={20} minSize={15}>
                                 <Sidebar
                                     initialPath={projectPath}
+                                    rootFile={rootFile}
                                     onProjectSelect={handleProjectSelect}
                                     onFileSelect={handleFileSelect}
                                     beforeMutation={documents.flushAll}

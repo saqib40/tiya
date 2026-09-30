@@ -1,13 +1,12 @@
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use tauri::{Emitter, Window};
-use notify::{Watcher, RecursiveMode, RecommendedWatcher, Config};
-use std::sync::mpsc::channel;
+use tauri::Window;
 
 mod filesystem;
 mod project;
 mod compiler;
+mod watcher;
 
 #[tauri::command]
 fn load_project(path: String) -> Result<project::ProjectInfo, String> {
@@ -72,25 +71,13 @@ fn cancel_compile(state: tauri::State<'_, compiler::CompilerState>, request_id: 
 }
 
 #[tauri::command]
-fn watch_directory(path: String, window: Window) {
-    std::thread::spawn(move || {
-        let (tx, rx) = channel();
-        let mut watcher = RecommendedWatcher::new(tx, Config::default()).map_err(|e| e.to_string()).unwrap();
+fn watch_directory(path: String, root_file: Option<String>, watch_id: String, window: Window, state: tauri::State<'_, watcher::WatchState>) -> Result<(), String> {
+    watcher::start(&state, Path::new(&path), root_file.map(Into::into), watch_id, window)
+}
 
-        watcher.watch(Path::new(&path), RecursiveMode::Recursive).map_err(|e| e.to_string()).unwrap();
-
-        println!("Started watching: {}", path);
-
-        for res in rx {
-            match res {
-                Ok(_event) => {
-                    // We emit a simple event to trigger a refresh in the frontend
-                    let _ = window.emit("fs-change", {});
-                }
-                Err(e) => println!("watch error: {:?}", e),
-            }
-        }
-    });
+#[tauri::command]
+fn unwatch_directory(watch_id: String, state: tauri::State<'_, watcher::WatchState>) -> Result<(), String> {
+    watcher::stop(&state, &watch_id)
 }
 
 #[tauri::command]
@@ -135,6 +122,7 @@ fn move_node(source: String, destination: String) -> Result<(), String> {
 pub fn run() {
     tauri::Builder::default()
         .manage(compiler::CompilerState::default())
+        .manage(watcher::WatchState::default())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -157,7 +145,8 @@ pub fn run() {
             create_directory,
             delete_node,
             move_node,
-            watch_directory
+            watch_directory,
+            unwatch_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

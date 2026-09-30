@@ -14,10 +14,12 @@ interface FileNode {
 
 interface SidebarProps {
     initialPath?: string | null;
+    rootFile?: string | null;
     onProjectSelect: (path: string) => void;
     onFileSelect: (path: string, content: string) => void;
     beforeMutation?: () => Promise<void>;
     onMutation?: (source: string, destination: string | null) => Promise<void>;
+    onFilesChanged?: (paths: string[]) => Promise<void>;
 }
 
 export function itemName(input: string, latexDefault = false) {
@@ -278,7 +280,7 @@ const FileTreeItem = memo(({
 
 FileTreeItem.displayName = "FileTreeItem";
 
-const Sidebar = ({ initialPath, onProjectSelect, onFileSelect, beforeMutation, onMutation }: SidebarProps) => {
+const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeMutation, onMutation, onFilesChanged }: SidebarProps) => {
     const [rootFiles, setRootFiles] = useState<FileNode[]>([]);
     const [selectedPath, setSelectedPath] = useState<string | null>(null);
     const [selectedIsDir, setSelectedIsDir] = useState(false);
@@ -290,6 +292,8 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect, beforeMutation, o
     const [refreshKey, setRefreshKey] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [rename, setRename] = useState<{ path: string; name: string } | null>(null);
+    const onFilesChangedRef = useRef(onFilesChanged);
+    useEffect(() => { onFilesChangedRef.current = onFilesChanged; }, [onFilesChanged]);
 
     useEffect(() => {
         setSelectedPath(null);
@@ -333,30 +337,44 @@ const Sidebar = ({ initialPath, onProjectSelect, onFileSelect, beforeMutation, o
     useEffect(() => {
         if (!initialPath) return;
 
-        let unlisten: (() => void) | null = null;
-
+        const watchId = crypto.randomUUID();
+        let disposed = false;
+        let started = false;
+        let unlisten: (() => void) | undefined;
+        let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+        const changes = new Set<string>();
         const setupWatcher = async () => {
             try {
-                // 1. Start the recursive watcher in the backend
-                await invoke("watch_directory", { path: initialPath });
-
-                // 2. Listen for the 'fs-change' event emitted by the watcher thread
-                unlisten = await listen("fs-change", () => {
-                    console.log("FS Change detected, refreshing...");
-                    // Increment refreshKey to trigger deep refresh
-                    setRefreshKey(prev => prev + 1);
+                unlisten = await listen<{ watch_id: string; paths: string[]; error?: string }>("fs-change", ({ payload }) => {
+                    if (disposed || payload.watch_id !== watchId) return;
+                    if (payload.error) { setError(payload.error); return; }
+                    payload.paths.forEach(path => changes.add(path));
+                    clearTimeout(refreshTimer);
+                    refreshTimer = setTimeout(() => {
+                        const paths = [...changes];
+                        changes.clear();
+                        setRefreshKey(value => value + 1);
+                        void onFilesChangedRef.current?.(paths).catch(failure => setError(String(failure)));
+                    }, 200);
                 });
+                if (disposed) { unlisten(); return; }
+                await invoke("watch_directory", { path: initialPath, rootFile: rootFile ?? null, watchId });
+                started = true;
+                if (disposed) await invoke("unwatch_directory", { watchId });
             } catch (error) {
-                console.error("Failed to setup file watcher:", error);
+                if (!disposed) setError(`File watching is unavailable: ${String(error)}`);
             }
         };
 
         setupWatcher();
 
         return () => {
-            if (unlisten) unlisten();
+            disposed = true;
+            clearTimeout(refreshTimer);
+            unlisten?.();
+            if (started) void invoke("unwatch_directory", { watchId }).catch(() => undefined);
         };
-    }, [initialPath]);
+    }, [initialPath, rootFile]);
 
     const handleOpenProject = useCallback(async () => {
         try {

@@ -42,4 +42,14 @@ describe("safe project file operations", () => {
         fireEvent.click(screen.getByRole("button", { name: "Move to Trash" }));
         expect(await screen.findByRole("alert")).toHaveTextContent("Trash is unavailable");
     });
+
+    it("stops the owned watcher when a project closes", async () => {
+        const { unmount } = render(<Sidebar initialPath="/project" rootFile="/project/main.tex" onProjectSelect={vi.fn()} onFileSelect={vi.fn()} />);
+        await waitFor(() => expect(invoke).toHaveBeenCalledWith("watch_directory", {
+            path: "/project", rootFile: "/project/main.tex", watchId: expect.any(String),
+        }));
+        const watchId = invoke.mock.calls.find(([command]) => command === "watch_directory")![1].watchId;
+        unmount();
+        expect(invoke).toHaveBeenCalledWith("unwatch_directory", { watchId });
+    });
 });
