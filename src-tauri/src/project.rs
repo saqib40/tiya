@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 #[derive(Serialize)]
@@ -14,6 +14,221 @@ pub struct ProjectInfo {
 #[serde(default)]
 struct ProjectSettings {
     root_file: Option<PathBuf>,
+}
+
+fn project_name(name: &str) -> Result<&str, String> {
+    let name = name.trim();
+    let base = name.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let reserved = matches!(base.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (base.len() == 4
+            && (base.starts_with("COM") || base.starts_with("LPT"))
+            && matches!(base.as_bytes()[3], b'1'..=b'9'));
+    if name.is_empty()
+        || matches!(name, "." | "..")
+        || name.ends_with('.')
+        || reserved
+        || name
+            .chars()
+            .any(|character| character.is_control() || "\\/<>:\"|?*".contains(character))
+    {
+        return Err("Enter a valid project name".into());
+    }
+    Ok(name)
+}
+
+fn template_content(template: &str) -> Result<&'static str, String> {
+    match template {
+        "article" => Ok(concat!(
+            r"\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{hyperref}
+    ",
+            r"\title{Untitled Article}
+\author{Your Name}
+\date{\today}
+\begin{document}
+\maketitle
+\begin{abstract}
+Your abstract.
+\end{abstract}
+\section{Introduction}
+Your introduction.
+\section{Results}
+\begin{equation}
+E = mc^2
+\end{equation}
+\end{document}
+"
+        )),
+        "report" => Ok(concat!(
+            r"\documentclass[11pt]{report}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+",
+            r"\title{Untitled Report}
+\author{Your Name}
+\date{\today}
+\begin{document}
+\maketitle
+",
+            r"\tableofcontents
+\chapter{Introduction}
+Your introduction.
+\chapter{Results}
+Your results.
+\end{document}
+"
+        )),
+        "cv" => Ok(concat!(
+            r"\documentclass[11pt]{article}
+\usepackage[margin=0.8in]{geometry}
+\usepackage{hyperref}
+\pagestyle{empty}
+\begin{document}
+\begin{center}
+{\LARGE Your Name}\\[4pt]
+\href{mailto:you@example.com}{you@example.com}
+\end{center}
+\section*{Education}
+",
+            r"\textbf{Your University} \hfill Graduation year\\
+Degree and field of study
+\section*{Experience}
+",
+            r"\textbf{Role, Organization} \hfill Dates
+\begin{itemize}
+\item A measurable contribution.
+\end{itemize}
+\section*{Skills}
+Your skills.
+\end{document}
+"
+        )),
+        "presentation" => Ok(concat!(
+            r"\documentclass{beamer}
+\usetheme{default}
+",
+            r"\title{Untitled Presentation}
+\author{Your Name}
+\date{\today}
+\begin{document}
+\frame{\titlepage}
+\begin{frame}{Introduction}
+\begin{itemize}
+\item Your first point.
+\item Your second point.
+\end{itemize}
+\end{frame}
+\end{document}
+"
+        )),
+        _ => Err("Unknown project template".into()),
+    }
+}
+
+pub fn create_project(parent: &Path, name: &str, template: &str) -> Result<ProjectInfo, String> {
+    let content = template_content(template)?;
+    let directory = fs::canonicalize(parent)
+        .map_err(|error| error.to_string())?
+        .join(project_name(name)?);
+    fs::create_dir(&directory)
+        .map_err(|error| format!("Could not create the project folder: {error}"))?;
+    let result = (|| {
+        fs::write(directory.join("main.tex"), content).map_err(|error| error.to_string())?;
+        set_root(&directory, &directory.join("main.tex"))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&directory);
+    }
+    result
+}
+
+pub fn import_project(archive: &Path, parent: &Path, name: &str) -> Result<ProjectInfo, String> {
+    const MAX_FILE: u64 = 64 * 1024 * 1024;
+    const MAX_PROJECT: u64 = 256 * 1024 * 1024;
+    let file = fs::File::open(archive).map_err(|error| error.to_string())?;
+    let mut archive =
+        zip::ZipArchive::new(file).map_err(|error| format!("Invalid ZIP archive: {error}"))?;
+    if archive.len() > 10_000 {
+        return Err("The ZIP archive contains too many files".into());
+    }
+    let mut total = 0u64;
+    let mut paths = std::collections::HashSet::new();
+    for index in 0..archive.len() {
+        let entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        let path = entry
+            .enclosed_name()
+            .ok_or("The ZIP archive contains a path outside the project")?;
+        for component in path.components() {
+            if let std::path::Component::Normal(name) = component {
+                project_name(name.to_str().ok_or("ZIP file names must be UTF-8")?)?;
+            }
+        }
+        if entry
+            .unix_mode()
+            .is_some_and(|mode| mode & 0o170000 == 0o120000)
+        {
+            return Err("ZIP archives containing symbolic links are not supported".into());
+        }
+        if !paths.insert(path) {
+            return Err("The ZIP archive contains duplicate file names".into());
+        }
+        total = total
+            .checked_add(entry.size())
+            .ok_or("The ZIP archive is too large")?;
+        if entry.size() > MAX_FILE || total > MAX_PROJECT {
+            return Err("The ZIP archive exceeds the 64 MB file or 256 MB project limit".into());
+        }
+    }
+    let directory = fs::canonicalize(parent)
+        .map_err(|error| error.to_string())?
+        .join(project_name(name)?);
+    fs::create_dir(&directory)
+        .map_err(|error| format!("Could not create the project folder: {error}"))?;
+    let result = (|| {
+        let mut extracted = 0u64;
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
+            let relative = entry.enclosed_name().ok_or("Invalid ZIP path")?;
+            if relative.components().any(|component| {
+                component.as_os_str().to_string_lossy().starts_with(".tiya")
+                    || component.as_os_str() == ".git"
+            }) {
+                continue;
+            }
+            let path = directory.join(relative);
+            if entry.is_dir() {
+                fs::create_dir_all(path).map_err(|error| error.to_string())?;
+            } else {
+                fs::create_dir_all(path.parent().ok_or("Invalid ZIP path")?)
+                    .map_err(|error| error.to_string())?;
+                let mut output = fs::OpenOptions::new()
+                    .create_new(true)
+                    .write(true)
+                    .open(&path)
+                    .map_err(|error| error.to_string())?;
+                let limit = MAX_FILE.min(MAX_PROJECT - extracted);
+                let written = std::io::copy(
+                    &mut std::io::Read::by_ref(&mut entry).take(limit + 1),
+                    &mut output,
+                )
+                .map_err(|error| error.to_string())?;
+                if written > limit {
+                    return Err("The extracted project exceeds the size limit".into());
+                }
+                if written != entry.size() {
+                    return Err("A ZIP entry has an invalid uncompressed size".into());
+                }
+                extracted += written;
+            }
+        }
+        load_project(&directory)
+    })();
+    if result.is_err() {
+        let _ = fs::remove_dir_all(&directory);
+    }
+    result
 }
 
 fn collect_sources(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
@@ -154,6 +369,76 @@ mod tests {
         directory
     }
 
+    fn archive_fixture(path: &Path, file_name: &str) {
+        let mut archive = zip::ZipWriter::new(fs::File::create(path).unwrap());
+        archive
+            .start_file(file_name, zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive
+            .write_all(template_content("article").unwrap().as_bytes())
+            .unwrap();
+        archive.finish().unwrap();
+    }
+
+    #[test]
+    fn creates_a_complete_template_without_overwriting_existing_projects() {
+        let directory = tempfile::tempdir().unwrap();
+        let project = create_project(directory.path(), "Paper", "article").unwrap();
+        assert!(project.root_file.unwrap().ends_with("main.tex"));
+        assert!(create_project(directory.path(), "Paper", "cv").is_err());
+        assert!(fs::read_to_string(directory.path().join("Paper/main.tex"))
+            .unwrap()
+            .contains("Untitled Article"));
+    }
+
+    #[test]
+    fn imports_an_overleaf_style_zip_and_detects_its_root() {
+        let directory = tempfile::tempdir().unwrap();
+        let archive = directory.path().join("paper.zip");
+        archive_fixture(&archive, "main.tex");
+        let project = import_project(&archive, directory.path(), "Imported").unwrap();
+        assert!(project.root_file.unwrap().ends_with("Imported/main.tex"));
+        assert!(import_project(&archive, directory.path(), "Imported").is_err());
+    }
+
+    #[test]
+    fn rejects_zip_traversal_before_creating_a_project() {
+        let directory = tempfile::tempdir().unwrap();
+        let archive = directory.path().join("unsafe.zip");
+        archive_fixture(&archive, "../outside.tex");
+        assert!(import_project(&archive, directory.path(), "Imported").is_err());
+        assert!(!directory.path().join("Imported").exists());
+        assert!(!directory.path().join("outside.tex").exists());
+    }
+
+    #[test]
+    fn rejects_zip_symlinks_before_creating_a_project() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("unsafe.zip");
+        let mut archive = zip::ZipWriter::new(fs::File::create(&path).unwrap());
+        archive
+            .add_symlink(
+                "link",
+                "../outside",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+        archive.finish().unwrap();
+        assert!(import_project(&path, directory.path(), "Imported")
+            .err()
+            .unwrap()
+            .contains("symbolic links"));
+        assert!(!directory.path().join("Imported").exists());
+    }
+
+    #[test]
+    fn rejects_invalid_project_names_and_unknown_templates() {
+        let directory = tempfile::tempdir().unwrap();
+        assert!(create_project(directory.path(), "../outside", "article").is_err());
+        assert!(create_project(directory.path(), "CON", "article").is_err());
+        assert!(create_project(directory.path(), "Paper", "unknown").is_err());
+    }
+
     #[test]
     fn detects_the_root_in_a_multi_file_project() {
         let directory = fixture();
@@ -281,7 +566,7 @@ author={Example Author}, title={A Sample Paper}, journal={Sample Journal}, year=
             .join(binary_name);
         let output_directory = directory.path().join(".tiya-build-test");
         fs::create_dir(&output_directory).unwrap();
-        let output = std::process::Command::new(binary)
+        let output = std::process::Command::new(&binary)
             .current_dir(directory.path())
             .args([
                 "-X",
@@ -307,5 +592,21 @@ author={Example Author}, title={A Sample Paper}, journal={Sample Journal}, year=
         assert!(output_directory.join("main.synctex.gz").exists());
         let log = fs::read_to_string(output_directory.join("main.log")).unwrap();
         assert!(!log.contains("There were undefined references"));
+        for template in ["article", "report", "cv", "presentation"] {
+            let project = create_project(directory.path(), template, template).unwrap();
+            let output = std::process::Command::new(&binary)
+                .current_dir(&project.path)
+                .args(["-X", "compile", "--untrusted", "main.tex"])
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{template}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(fs::read(Path::new(&project.path).join("main.pdf"))
+                .unwrap()
+                .starts_with(b"%PDF-"));
+        }
     }
 }

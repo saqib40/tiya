@@ -14,6 +14,18 @@ fn load_project(path: String) -> Result<project::ProjectInfo, String> {
 }
 
 #[tauri::command]
+async fn create_project(parent_path: String, name: String, template: String) -> Result<project::ProjectInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || project::create_project(Path::new(&parent_path), &name, &template))
+        .await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn import_project(archive_path: String, parent_path: String, name: String) -> Result<project::ProjectInfo, String> {
+    tauri::async_runtime::spawn_blocking(move || project::import_project(Path::new(&archive_path), Path::new(&parent_path), &name))
+        .await.map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
 fn set_project_root(project_path: String, file_path: String) -> Result<project::ProjectInfo, String> {
     project::set_root(Path::new(&project_path), Path::new(&file_path))
 }
@@ -141,6 +153,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             load_project,
+            create_project,
+            import_project,
             set_project_root,
             resolve_project_file,
             open_directory,
