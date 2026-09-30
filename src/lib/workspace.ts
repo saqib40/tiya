@@ -8,12 +8,22 @@ export interface WorkspaceState {
     lastProject: string | null;
     sessions: Record<string, ProjectSession>;
     automaticCompile: boolean;
+    appearance: WorkspaceAppearance;
+}
+
+export interface WorkspaceAppearance {
+    theme: 'dark' | 'light';
+    fontSize: number;
+    wordWrap: boolean;
+    view: 'split' | 'editor' | 'preview' | 'files';
+    sidebar: boolean;
+    layout: { files: number; editor: number; preview: number };
 }
 
 const key = "tiya.workspace.v1";
 
 export function readWorkspace(): WorkspaceState {
-    const fallback: WorkspaceState = { recentProjects: [], lastProject: null, sessions: {}, automaticCompile: true };
+    const fallback: WorkspaceState = { recentProjects: [], lastProject: null, sessions: {}, automaticCompile: true, appearance: { theme: 'dark', fontSize: 14, wordWrap: true, view: 'split', sidebar: true, layout: { files: 20, editor: 40, preview: 40 } } };
     try {
         const value = JSON.parse(localStorage.getItem(key) || "null");
         if (!value || typeof value !== "object") return fallback;
@@ -25,7 +35,17 @@ export function readWorkspace(): WorkspaceState {
                 sessions[path] = { files: session.files.filter((file: unknown) => typeof file === "string"), activeFile: session.activeFile };
             }
         }
-        return { recentProjects, sessions, lastProject: typeof value.lastProject === "string" ? value.lastProject : null, automaticCompile: value.automaticCompile !== false };
+        const appearance = value.appearance || {};
+        const layout = appearance.layout;
+        const validLayout = layout && ['files', 'editor', 'preview'].every(panel => Number.isFinite(layout[panel]) && layout[panel] > 0) && Math.abs(layout.files + layout.editor + layout.preview - 100) < 0.1;
+        return { recentProjects, sessions, lastProject: typeof value.lastProject === "string" ? value.lastProject : null, automaticCompile: value.automaticCompile !== false, appearance: {
+            theme: appearance.theme === 'light' ? 'light' : 'dark',
+            fontSize: Number.isFinite(appearance.fontSize) ? Math.max(10, Math.min(24, Math.round(appearance.fontSize))) : 14,
+            wordWrap: appearance.wordWrap !== false,
+            view: ['split', 'editor', 'preview', 'files'].includes(appearance.view) ? appearance.view : 'split',
+            sidebar: appearance.sidebar !== false,
+            layout: validLayout ? { files: layout.files, editor: layout.editor, preview: layout.preview } : fallback.appearance.layout,
+        } };
     } catch { return fallback; }
 }
 

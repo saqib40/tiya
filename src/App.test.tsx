@@ -40,6 +40,7 @@ vi.mock("./components/PDFPreview", () => ({
 
 describe("project compilation", () => {
     beforeEach(() => {
+        HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
         invoke.mockImplementation(async (command: string, payload?: { requestedPath?: string }) => {
             if (command === "load_project" || command === "set_project_root") {
                 return { path: "/project", root_file: "/project/main.tex", tex_files: ["/project/main.tex", "/project/chapter.tex"] };
@@ -158,5 +159,22 @@ describe("project compilation", () => {
         expect(screen.queryByRole('textbox', { name: 'Source' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Close asset preview' }));
         expect(screen.getByRole('textbox', { name: 'Source' })).toHaveValue('Unsaved draft');
+    });
+
+    it('persists appearance preferences and changes views without dropping buffers', async () => {
+        render(<App />);
+        fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
+        await screen.findByRole('textbox', { name: 'Source' });
+        fireEvent.click(screen.getByRole('button', { name: 'Preferences' }));
+        fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), { target: { value: 'light' } });
+        fireEvent.change(screen.getByRole('spinbutton', { name: 'Editor font size' }), { target: { value: '18' } });
+        fireEvent.click(screen.getByRole('checkbox', { name: 'Word wrap' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+        expect(document.documentElement.dataset.theme).toBe('light');
+        expect(readWorkspace().appearance).toMatchObject({ theme: 'light', fontSize: 18, wordWrap: false });
+        fireEvent.click(screen.getByRole('button', { name: 'PDF view' }));
+        expect(screen.queryByRole('textbox', { name: 'Source' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Source view' }));
+        expect(screen.getByRole('textbox', { name: 'Source' })).toHaveValue('Root document');
     });
 });

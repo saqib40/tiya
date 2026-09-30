@@ -12,9 +12,12 @@ interface CodeEditorProps {
     location?: EditorLocation | null;
     path?: string;
     openPaths?: string[];
+    fontSize?: number;
+    wordWrap?: boolean;
+    theme?: 'dark' | 'light';
 }
 
-const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "untitled.tex", openPaths }: CodeEditorProps) => {
+const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "untitled.tex", openPaths, fontSize = 14, wordWrap = true, theme = 'dark' }: CodeEditorProps) => {
     const editorRef = useRef<any>(null);
     const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
     const modelPaths = useRef(new Set<string>());
@@ -185,18 +188,18 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
                 saveViewState
                 defaultLanguage="latex"
                 language="latex"
-                theme="vs-dark"
+                theme={theme === 'light' ? 'vs' : 'vs-dark'}
                 defaultValue={code}
                 value={code}
                 onChange={onChange}
                 beforeMount={handleEditorWillMount}
                 onMount={handleEditorDidMount}
                 options={{
-                    fontSize: 14,
+                    fontSize,
                     fontFamily: "'Fira Code', 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace",
                     minimap: { enabled: false },
                     scrollBeyondLastLine: false,
-                    wordWrap: 'on',
+                    wordWrap: wordWrap ? 'on' : 'off',
                     automaticLayout: true,
                     smoothScrolling: false,
                     contextmenu: true,

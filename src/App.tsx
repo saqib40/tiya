@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Panel, Group, Separator } from "react-resizable-panels";
+import { Panel, Group, Separator, GroupImperativeHandle } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square, X, House } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square, X, House, Settings, PanelLeft, Code2, Columns2, BookOpen } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
 import AssetPreview from "./components/AssetPreview";
@@ -21,6 +21,15 @@ type PipelineStatus = 'Ready' | 'Unsaved' | 'Saving...' | 'Compiling...' | 'Erro
 
 function App() {
     const [workspace, setWorkspace] = useState(readWorkspace);
+    const appearance = workspace.appearance;
+    const group = useRef<GroupImperativeHandle>(null);
+    const [narrow, setNarrow] = useState(() => window.matchMedia?.('(max-width: 899px)').matches ?? false);
+    const [preferencesOpen, setPreferencesOpen] = useState(false);
+    const preferencesDialog = useRef<HTMLDialogElement>(null);
+    const view = narrow && appearance.view === 'split' ? 'editor' : appearance.view;
+    const showFiles = view === 'files' || (view === 'split' && appearance.sidebar);
+    const showEditor = view === 'editor' || view === 'split';
+    const showPreview = view === 'preview' || view === 'split';
     const projectSelection = useRef(0);
     const fileSelection = useRef(0);
     const [assetPath, setAssetPath] = useState<string | null>(null);
@@ -42,6 +51,33 @@ function App() {
         : documents.dirtyCount > 0 && compiler.status === 'Ready' ? 'Unsaved' : compiler.status;
 
     useEffect(() => { setPdfLocation(null); }, [compiler.pdfPath, compiler.pdfRevision]);
+
+    useEffect(() => {
+        const media = window.matchMedia?.('(max-width: 899px)');
+        if (!media) return;
+        const changed = () => setNarrow(media.matches);
+        media.addEventListener('change', changed);
+        return () => media.removeEventListener('change', changed);
+    }, []);
+
+    useEffect(() => { document.documentElement.dataset.theme = appearance.theme; }, [appearance.theme]);
+    useEffect(() => { if (preferencesOpen) preferencesDialog.current?.showModal(); }, [preferencesOpen]);
+
+    useEffect(() => {
+        const layout = appearance.layout;
+        const editorSize = 100 * layout.editor / (layout.editor + layout.preview);
+        group.current?.setLayout(view === 'split'
+            ? appearance.sidebar ? layout : { files: 0, editor: editorSize, preview: 100 - editorSize }
+            : { files: view === 'files' ? 100 : 0, editor: view === 'editor' ? 100 : 0, preview: view === 'preview' ? 100 : 0 });
+    }, [view, appearance.sidebar, projectPath]);
+
+    const rememberLayout = (layout: Record<string, number>) => {
+        if (view !== 'split' || !appearance.sidebar || !layout.files || !layout.editor || !layout.preview) return;
+        setWorkspace(previous => {
+            if (['files', 'editor', 'preview'].every(panel => Math.abs(previous.appearance.layout[panel as keyof typeof previous.appearance.layout] - layout[panel]) < 0.01)) return previous;
+            return { ...previous, appearance: { ...previous.appearance, layout: { files: layout.files, editor: layout.editor, preview: layout.preview } } };
+        });
+    };
 
     useEffect(() => {
         try { saveWorkspace(workspace); }
@@ -224,14 +260,14 @@ function App() {
                 <Home onProjectSelect={handleProjectSelect} recentProjects={workspace.recentProjects} onForgetProject={path => setWorkspace(previous => ({ ...previous, recentProjects: previous.recentProjects.filter(project => project !== path) }))} />
             ) : (
                 <>
-                    <div className="flex items-center gap-3 border-b border-white/5 bg-slate-900 px-4 py-2 text-xs">
+                    <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-900 px-3 py-2 text-xs">
                         <button title="Close project" aria-label="Close project" onClick={() => void closeProject()} className="shrink-0 p-1 text-slate-300"><House size={16} /></button>
-                        <label htmlFor="root-document" className="shrink-0 text-slate-400">Root document</label>
+                        <label htmlFor="root-document" className="sr-only shrink-0 text-slate-400 sm:not-sr-only">Root document</label>
                         <select
                             id="root-document"
                             value={rootFile ?? ""}
                             onChange={event => void handleRootSelect(event.target.value)}
-                            className="min-w-0 max-w-sm flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
+                            className="min-w-32 max-w-sm flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
                         >
                             <option value="" disabled>Choose a root document</option>
                             {texFiles.map(path => <option key={path} value={path}>{relativePath(projectPath, path)}</option>)}
@@ -246,6 +282,13 @@ function App() {
                         <button type="button" onClick={compiler.cancelCompile} disabled={compiler.status !== 'Compiling...'} title="Cancel build" aria-label="Cancel build" className="p-1.5 text-red-300 disabled:opacity-40">
                             <Square size={16} />
                         </button>
+                        <div role="group" aria-label="Workspace view" className="ml-auto flex shrink-0 items-center gap-1 rounded border border-slate-700 p-0.5">
+                            <button title="Files" aria-label="Files" aria-pressed={showFiles} onClick={() => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, ...(view === 'split' ? { sidebar: !previous.appearance.sidebar } : { view: view === 'files' ? 'editor' : 'files' }) } }))} className={`p-1.5 ${showFiles ? 'bg-slate-800 text-emerald-400' : 'text-slate-400'}`}><PanelLeft size={16} /></button>
+                            <button title="Source view" aria-label="Source view" aria-pressed={view === 'editor'} onClick={() => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, view: 'editor' } }))} className={`p-1.5 ${view === 'editor' ? 'bg-slate-800 text-emerald-400' : 'text-slate-400'}`}><Code2 size={16} /></button>
+                            <button title="Split view" aria-label="Split view" aria-pressed={view === 'split'} disabled={narrow} onClick={() => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, view: 'split' } }))} className={`p-1.5 disabled:opacity-30 ${view === 'split' ? 'bg-slate-800 text-emerald-400' : 'text-slate-400'}`}><Columns2 size={16} /></button>
+                            <button title="PDF view" aria-label="PDF view" aria-pressed={view === 'preview'} onClick={() => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, view: 'preview' } }))} className={`p-1.5 ${view === 'preview' ? 'bg-slate-800 text-emerald-400' : 'text-slate-400'}`}><BookOpen size={16} /></button>
+                        </div>
+                        <button title="Preferences" aria-label="Preferences" onClick={() => setPreferencesOpen(true)} className="shrink-0 p-1.5 text-slate-300"><Settings size={16} /></button>
                     </div>
                     {(compiler.log || compiler.error) && <div className="max-h-44 shrink-0 overflow-auto border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs">
                         {compiler.error && <p role="alert" className="mb-2 text-red-300">{compiler.error.split('\n')[0]}</p>}
@@ -262,9 +305,10 @@ function App() {
                         </details>
                     </div>}
                     <div className="flex-1 relative overflow-hidden">
-                        <Group orientation="horizontal" className="absolute inset-0">
+                        <Group groupRef={group} defaultLayout={appearance.layout} onLayoutChange={rememberLayout} orientation="horizontal" className="absolute inset-0">
                             {/* Left Sidebar */}
-                            <Panel defaultSize="20%" minSize="15%">
+                            <Panel id="files" collapsible defaultSize="20%" minSize="15%">
+                                <div hidden={!showFiles} className={showFiles ? 'h-full' : 'hidden'}>
                                 <Sidebar
                                     initialPath={projectPath}
                                     rootFile={rootFile}
@@ -275,13 +319,14 @@ function App() {
                                     onMutation={handleMutation}
                                     onFilesChanged={handleFilesChanged}
                                 />
+                                </div>
                             </Panel>
 
-                            <Separator className="w-1 bg-slate-800/10 hover:bg-blue-600/20 transition-colors cursor-col-resize active:bg-blue-600/40" />
+                            <Separator className={`${showFiles && view === 'split' ? 'w-1' : 'hidden'} bg-slate-800/10 hover:bg-blue-600/20 transition-colors cursor-col-resize active:bg-blue-600/40`} />
 
                             {/* Middle Editor Area */}
-                            <Panel defaultSize="40%" minSize="20%">
-                                <div className="h-full w-full flex flex-col border-r border-white/5 bg-slate-950">
+                            <Panel id="editor" collapsible defaultSize="40%" minSize="20%">
+                                <div hidden={!showEditor} className={showEditor ? "h-full w-full flex flex-col border-r border-slate-800 bg-slate-950" : 'hidden'}>
                                     <div role="tablist" aria-label="Open files" className="flex shrink-0 overflow-x-auto border-b border-white/5 bg-slate-900/50">
                                         {Object.values(documents.buffers).map(buffer => <div key={buffer.path} className={`flex shrink-0 items-center border-r border-slate-800 ${buffer.path === filePath ? 'bg-slate-800' : ''}`}>
                                             <button role="tab" aria-selected={!assetPath && buffer.path === filePath} onClick={() => void handleFileSelect(buffer.path, buffer.content)} title={buffer.path} className="max-w-48 truncate px-3 py-2 text-xs text-slate-200">
@@ -318,6 +363,9 @@ function App() {
                                                 onChange={(value) => documents.updateDocument(filePath, value || "")}
                                                 onSave={handleSave}
                                                 onForwardSync={compiler.pdfPath ? showInPdf : undefined}
+                                                fontSize={appearance.fontSize}
+                                                wordWrap={appearance.wordWrap}
+                                                theme={appearance.theme}
                                                 location={editorLocation}
                                             />
                                         ) : (
@@ -337,11 +385,11 @@ function App() {
                                 </div>
                             </Panel>
 
-                            <Separator className="w-1 bg-slate-800/10 hover:bg-blue-600/20 transition-colors cursor-col-resize active:bg-blue-600/40" />
+                            <Separator className={`${view === 'split' ? 'w-1' : 'hidden'} bg-slate-800/10 hover:bg-blue-600/20 transition-colors cursor-col-resize active:bg-blue-600/40`} />
 
                             {/* Right Preview Area */}
-                            <Panel defaultSize="40%" minSize="20%">
-                                <div className="h-full w-full bg-slate-950">
+                            <Panel id="preview" collapsible defaultSize="40%" minSize="20%">
+                                <div hidden={!showPreview} className={showPreview ? "h-full w-full bg-slate-950" : 'hidden'}>
                                     <PDFPreview
                                         pdfPath={compiler.pdfPath}
                                         pdfRevision={compiler.pdfRevision}
@@ -356,7 +404,7 @@ function App() {
                     </div>
 
                     {/* Live Status Footer */}
-                    <footer className={`h-6 flex items-center px-4 transition-colors duration-300 ${status === 'Error' ? 'bg-red-900' :
+                    <footer className={`h-6 shrink-0 flex items-center px-4 transition-colors duration-300 ${status === 'Error' ? 'bg-red-900' :
                         status === 'Ready' ? 'bg-slate-800' : 'bg-blue-900'
                         }`}>
                         <div className="flex items-center gap-2">
@@ -376,6 +424,15 @@ function App() {
                     </footer>
                 </>
             )}
+            {preferencesOpen && <dialog ref={preferencesDialog} aria-labelledby="preferences-title" onCancel={() => setPreferencesOpen(false)} className="m-auto rounded-lg border border-slate-600 bg-slate-900 p-6 text-slate-100 backdrop:bg-black/60" style={{ width: 'min(24rem, calc(100vw - 2rem))' }}>
+                <h2 id="preferences-title" className="mb-5 text-lg font-semibold">Preferences</h2>
+                <div className="flex flex-col gap-4 text-sm">
+                    <label className="flex items-center justify-between gap-4">Theme<select value={appearance.theme} onChange={event => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, theme: event.target.value as 'dark' | 'light' } }))} className="rounded border border-slate-600 bg-slate-950 px-2 py-1"><option value="dark">Dark</option><option value="light">Light</option></select></label>
+                    <label className="flex items-center justify-between gap-4">Editor font size<input type="number" min={10} max={24} value={appearance.fontSize} onChange={event => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, fontSize: Math.max(10, Math.min(24, Number(event.target.value) || 14)) } }))} className="w-20 rounded border border-slate-600 bg-slate-950 px-2 py-1" /></label>
+                    <label className="flex items-center justify-between gap-4">Word wrap<input type="checkbox" checked={appearance.wordWrap} onChange={event => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, wordWrap: event.target.checked } }))} /></label>
+                    <button onClick={() => setPreferencesOpen(false)} className="mt-2 self-end rounded border border-slate-600 px-3 py-2">Done</button>
+                </div>
+            </dialog>}
         </div>
     );
 }

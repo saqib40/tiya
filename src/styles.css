@@ -5,10 +5,12 @@
 }
 
 :root {
+  color-scheme: dark;
   font-family: "Inter Variable", sans-serif;
   font-size: 16px;
   line-height: 24px;
   font-weight: 400;
+  letter-spacing: 0;
 
   color: #0f172a;
   background-color: #0f172a;
@@ -18,6 +20,23 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   -webkit-text-size-adjust: 100%;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --color-slate-50: #121a16;
+  --color-slate-100: #18221c;
+  --color-slate-200: #28372e;
+  --color-slate-300: #39483f;
+  --color-slate-400: #526158;
+  --color-slate-500: #64736b;
+  --color-slate-600: #aab6af;
+  --color-slate-700: #c4cfc8;
+  --color-slate-800: #dfe7e2;
+  --color-slate-900: #f1f5f2;
+  --color-slate-950: #ffffff;
+  --color-emerald-400: #087b50;
+  --color-blue-400: #1d5fa8;
 }
 
 html,
