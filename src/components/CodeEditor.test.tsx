@@ -1,4 +1,4 @@
-import { act, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CodeEditor from "./CodeEditor";
 
@@ -10,6 +10,7 @@ const { commands, editor, readText } = vi.hoisted(() => {
         editor: {
             getModel: vi.fn(() => ({ isDisposed: (): boolean => false })),
             getSelection: vi.fn(() => ({ startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: 1 })),
+            getPosition: vi.fn(() => ({ lineNumber: 7, column: 2 })),
             executeEdits: vi.fn(),
             pushUndoStop: vi.fn(),
             getValue: vi.fn(() => "original"),
@@ -92,5 +93,12 @@ describe("editor save shortcut", () => {
         editor.getModel.mockReturnValue({ isDisposed: () => false });
         await act(async () => finish("clipboard text"));
         expect(editor.executeEdits).not.toHaveBeenCalled();
+    });
+
+    it('uses the current editor line for forward PDF navigation', () => {
+        const onForwardSync = vi.fn();
+        render(<CodeEditor code="text" onChange={vi.fn()} onForwardSync={onForwardSync} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Show in PDF' }));
+        expect(onForwardSync).toHaveBeenCalledWith(7);
     });
 });

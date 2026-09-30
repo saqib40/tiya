@@ -8,6 +8,8 @@ import AssetPreview from "./components/AssetPreview";
 import CodeEditor from "./components/CodeEditor";
 import { useDocuments } from "./hooks/useDocuments";
 import { useCompiler } from "./hooks/useCompiler";
+import { useSynctex } from "./hooks/useSynctex";
+import { forwardSync, inverseSync, SyncBox } from "./lib/synctex";
 import { ProjectInfo, relativePath } from "./lib/project";
 import { Diagnostic, EditorLocation, parseDiagnostics } from "./lib/diagnostics";
 import { readWorkspace, rememberProject, rememberSession, saveWorkspace } from "./lib/workspace";
@@ -30,12 +32,16 @@ function App() {
     const automaticCompile = workspace.automaticCompile;
     const [editorLocation, setEditorLocation] = useState<EditorLocation | null>(null);
     const compiler = useCompiler(rootFile, automaticCompile);
+    const sync = useSynctex(compiler.pdfPath, compiler.pdfRevision, rootFile);
+    const [pdfLocation, setPdfLocation] = useState<(SyncBox & { revision: number }) | null>(null);
     const documents = useDocuments(compiler.sourceSaved);
     const filePath = documents.activePath;
     const activeFileContent = documents.activeDocument?.content ?? null;
     const diagnostics = parseDiagnostics(compiler.log);
     const status: PipelineStatus = documents.error ? 'Error' : documents.saving ? 'Saving...'
         : documents.dirtyCount > 0 && compiler.status === 'Ready' ? 'Unsaved' : compiler.status;
+
+    useEffect(() => { setPdfLocation(null); }, [compiler.pdfPath, compiler.pdfRevision]);
 
     useEffect(() => {
         try { saveWorkspace(workspace); }
@@ -130,18 +136,34 @@ function App() {
 
     const handleDiagnostic = async (diagnostic: Diagnostic) => {
         if (!projectPath || !rootFile) return;
+        const selection = ++fileSelection.current;
         try {
             await documents.flushAll();
             const path = await invoke<string>("resolve_project_file", {
                 projectPath, rootFile, requestedPath: diagnostic.file,
             });
             const content = await invoke<string>("read_file_content", { path });
+            if (selection !== fileSelection.current) return;
+            setAssetPath(null);
             documents.openDocument(path, content);
             setEditorLocation(previous => ({ line: diagnostic.line, column: diagnostic.column, revision: (previous?.revision ?? 0) + 1 }));
             setProjectError(null);
         } catch (failure) {
-            setProjectError(String(failure));
+            if (selection === fileSelection.current) setProjectError(String(failure));
         }
+    };
+
+    const showInPdf = (line: number) => {
+        const target = forwardSync(sync.boxes, filePath, line);
+        if (!target) { setProjectError(sync.error || 'No matching position in the last successful PDF'); return; }
+        setPdfLocation(previous => ({ ...target, revision: (previous?.revision || 0) + 1 }));
+        setProjectError(null);
+    };
+
+    const showSource = (page: number, left: number, top: number) => {
+        const target = inverseSync(sync.boxes, page, left, top);
+        if (!target) { setProjectError(sync.error || 'No source position was found for this PDF location'); return; }
+        void handleDiagnostic({ file: target.file, line: target.line, column: 1, message: '', severity: 'warning' });
     };
 
     const handleMutation = async (source: string, destination: string | null) => {
@@ -295,6 +317,7 @@ function App() {
                                                 code={activeFileContent}
                                                 onChange={(value) => documents.updateDocument(filePath, value || "")}
                                                 onSave={handleSave}
+                                                onForwardSync={compiler.pdfPath ? showInPdf : undefined}
                                                 location={editorLocation}
                                             />
                                         ) : (
@@ -324,6 +347,8 @@ function App() {
                                         pdfRevision={compiler.pdfRevision}
                                         compiling={status === 'Compiling...'}
                                         error={documents.error || projectError || compiler.error}
+                                        location={pdfLocation}
+                                        onSource={showSource}
                                     />
                                 </div>
                             </Panel>

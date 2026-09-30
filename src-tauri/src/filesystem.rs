@@ -57,6 +57,31 @@ pub fn read_text_file(path: &Path) -> io::Result<String> {
     })
 }
 
+pub fn read_synctex(pdf: &Path) -> io::Result<String> {
+    const LIMIT: u64 = 32 * 1024 * 1024;
+    if !pdf
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Select a compiled PDF",
+        ));
+    }
+    let file = fs::File::open(pdf.with_extension("synctex.gz"))?;
+    let mut content = String::new();
+    flate2::read::GzDecoder::new(file)
+        .take(LIMIT + 1)
+        .read_to_string(&mut content)?;
+    if content.len() as u64 > LIMIT || !content.starts_with("SyncTeX Version:1") {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Unsupported or oversized SyncTeX data",
+        ));
+    }
+    Ok(content)
+}
+
 pub fn import_file(source: &Path, destination: &Path) -> io::Result<()> {
     const LIMIT: u64 = 64 * 1024 * 1024;
     let file = fs::File::open(source)?;
@@ -164,6 +189,22 @@ pub fn save_file(path: &Path, content: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_compiled_sync_map_and_rejects_invalid_data() {
+        let directory = tempfile::tempdir().unwrap();
+        let pdf = directory.path().join("main.pdf");
+        let data = "SyncTeX Version:1\nInput:1:/project/main.tex\n";
+        let mut encoder = flate2::write::GzEncoder::new(
+            fs::File::create(pdf.with_extension("synctex.gz")).unwrap(),
+            flate2::Compression::default(),
+        );
+        encoder.write_all(data.as_bytes()).unwrap();
+        encoder.finish().unwrap();
+        assert_eq!(read_synctex(&pdf).unwrap(), data);
+        fs::write(pdf.with_extension("synctex.gz"), "not gzip").unwrap();
+        assert!(read_synctex(&pdf).is_err());
+    }
 
     #[test]
     fn imports_binary_files_without_replacing_existing_assets() {

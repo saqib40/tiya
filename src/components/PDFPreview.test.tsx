@@ -71,4 +71,19 @@ describe("PDF error recovery", () => {
         fireEvent.click(screen.getByRole("button", { name: "Export PDF" }));
         await waitFor(() => expect(invoke).toHaveBeenCalledWith("export_pdf", { source: "/project/main.pdf", destination: "/exports/paper.pdf" }));
     });
+
+    it('reveals and highlights a forward SyncTeX position', () => {
+        render(<PDFPreview pdfPath="/project/main.pdf" error={null} location={{ file: '/project/chapter.tex', line: 7, page: 20, left: 72, top: 100, width: 120, height: 12, revision: 1 }} />);
+        expect(screen.getByRole('spinbutton', { name: 'Page number' })).toHaveValue(20);
+        expect(screen.getByLabelText('Source location')).toBeInTheDocument();
+    });
+
+    it('converts a clicked PDF location to page coordinates for inverse SyncTeX', () => {
+        const onSource = vi.fn();
+        render(<PDFPreview pdfPath="/project/main.pdf" error={null} onSource={onSource} />);
+        const page = screen.getByText('PDF page 1').closest('[data-page]')!;
+        vi.spyOn(page, 'getBoundingClientRect').mockReturnValue({ x: 10, y: 20, left: 10, top: 20, right: 622, bottom: 812, width: 612, height: 792, toJSON: () => ({}) });
+        fireEvent.doubleClick(page, { clientX: 82, clientY: 120 });
+        expect(onSource).toHaveBeenCalledWith(1, 72, 100);
+    });
 });

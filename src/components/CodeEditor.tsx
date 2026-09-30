@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Crosshair, Save } from 'lucide-react';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { EditorLocation } from '../lib/diagnostics';
 
@@ -8,12 +8,13 @@ interface CodeEditorProps {
     code: string;
     onChange: (value: string | undefined) => void;
     onSave?: () => void;
+    onForwardSync?: (line: number) => void;
     location?: EditorLocation | null;
     path?: string;
     openPaths?: string[];
 }
 
-const CodeEditor = ({ code, onChange, onSave, location, path = "untitled.tex", openPaths }: CodeEditorProps) => {
+const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "untitled.tex", openPaths }: CodeEditorProps) => {
     const editorRef = useRef<any>(null);
     const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
     const modelPaths = useRef(new Set<string>());
@@ -160,7 +161,11 @@ const CodeEditor = ({ code, onChange, onSave, location, path = "untitled.tex", o
     };
 
     return (
-        <div className="h-full min-h-0 w-full flex-1 relative overflow-hidden bg-slate-950">
+        <div className="h-full min-h-0 w-full flex-1 relative flex flex-col overflow-hidden bg-slate-950">
+            <div className="flex shrink-0 items-center justify-end gap-2 border-b border-slate-800 px-3 py-1 text-slate-400">
+                <button title="Save source" aria-label="Save source" disabled={!onSave} onClick={onSave} className="p-1 disabled:opacity-30"><Save size={15} /></button>
+                <button title="Show in PDF" aria-label="Show in PDF" disabled={!onForwardSync} onClick={() => { const position = editorRef.current?.getPosition(); if (position) onForwardSync?.(position.lineNumber); }} className="p-1 disabled:opacity-30"><Crosshair size={15} /></button>
+            </div>
             {pasteError && <div role="alert" className="absolute bottom-0 left-0 right-0 z-50 break-words bg-red-950 px-3 py-2 text-xs text-red-200">{pasteError}</div>}
             {/* Pasting Overlay */}
             {isPasting && (
@@ -172,6 +177,7 @@ const CodeEditor = ({ code, onChange, onSave, location, path = "untitled.tex", o
                 </div>
             )}
 
+            <div className="min-h-0 flex-1">
             <Editor
                 height="100%"
                 path={path}
@@ -206,6 +212,7 @@ const CodeEditor = ({ code, onChange, onSave, location, path = "untitled.tex", o
                     }
                 }}
             />
+            </div>
         </div>
     );
 };

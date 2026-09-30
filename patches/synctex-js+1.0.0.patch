@@ -1,0 +1,9 @@
+diff --git a/node_modules/synctex-js/lib/synctexParser.js b/node_modules/synctex-js/lib/synctexParser.js
+--- a/node_modules/synctex-js/lib/synctexParser.js
++++ b/node_modules/synctex-js/lib/synctexParser.js
+@@ -1,4 +1,5 @@
+ var parseSyncTex = function (pdfsyncBody) {
++  var match;
+   var unit = 65781.76;
+   var numberPages = 0;
+   var currentPage = {};

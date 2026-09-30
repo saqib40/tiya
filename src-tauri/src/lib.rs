@@ -73,6 +73,12 @@ fn read_file_content(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+async fn read_synctex(pdf_path: String) -> Result<String, String> {
+    tauri::async_runtime::spawn_blocking(move || filesystem::read_synctex(Path::new(&pdf_path)))
+        .await.map_err(|error| error.to_string())?.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn import_file(source: String, destination: String) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || filesystem::import_file(Path::new(&source), Path::new(&destination)))
         .await.map_err(|error| error.to_string())?.map_err(|error| error.to_string())
@@ -165,6 +171,7 @@ pub fn run() {
             resolve_project_file,
             open_directory,
             read_file_content,
+            read_synctex,
             import_file,
             compile_preview,
             cancel_compile,
