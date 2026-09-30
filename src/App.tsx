@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
@@ -6,66 +6,25 @@ import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
 import CodeEditor from "./components/CodeEditor";
 import { useDocuments } from "./hooks/useDocuments";
+import { useCompiler } from "./hooks/useCompiler";
 import { ProjectInfo, relativePath } from "./lib/project";
 
 import Home from "./components/Home";
 import TitleBar from "./components/TitleBar";
 
 type PipelineStatus = 'Ready' | 'Unsaved' | 'Saving...' | 'Compiling...' | 'Error';
-function cleanError(raw: string): string {
-    const lines = raw.split('\n');
-    const useful = lines.filter(line =>
-        line.trim() !== '' &&
-        !line.toLowerCase().includes('fontconfig') &&
-        !line.toLowerCase().includes('compilation failed') &&
-        !line.toLowerCase().includes('halted on')
-    );
-    const main = useful.find(line => line.includes('.tex:'));
-    return main?.trim() || useful[0]?.trim() || 'Unknown LaTeX error';
-}
 
 function App() {
     const [projectPath, setProjectPath] = useState<string | null>(null);
     const [rootFile, setRootFile] = useState<string | null>(null);
     const [texFiles, setTexFiles] = useState<string[]>([]);
-    const [pdfPath, setPdfPath] = useState<string | null>(null);
-    const [pdfRevision, setPdfRevision] = useState<number>(0);
-    const [compileStatus, setCompileStatus] = useState<PipelineStatus>('Ready');
-    const [compileError, setCompileError] = useState<string | null>(null);
-
-    const handleCompile = useCallback(async () => {
-        if (!rootFile) return;
-        setCompileStatus('Compiling...');
-        try {
-            const result: string = await invoke("compile_preview", { filePath: rootFile });
-            setPdfPath(result);
-            setPdfRevision(prev => prev + 1);
-            setCompileError(null);
-            setCompileStatus('Ready');
-        } catch (error: unknown) {
-            console.error("Pipeline failed:", error);
-            let raw: string;
-            if (typeof error === "string") {
-                raw = error;
-            } else if (error instanceof Error) {
-                raw = error.message;
-            } else {
-                try {
-                    raw = JSON.stringify(error) || String(error);
-                } catch {
-                    raw = String(error);
-                }
-            }
-            setCompileError(cleanError(raw));
-            setCompileStatus('Error');
-        }
-    }, [rootFile]);
-
-    const documents = useDocuments(handleCompile);
+    const [projectError, setProjectError] = useState<string | null>(null);
+    const compiler = useCompiler(rootFile);
+    const documents = useDocuments(compiler.requestCompile);
     const filePath = documents.activePath;
     const activeFileContent = documents.activeDocument?.content ?? null;
     const status: PipelineStatus = documents.error ? 'Error' : documents.saving ? 'Saving...'
-        : documents.dirtyCount > 0 && compileStatus === 'Ready' ? 'Unsaved' : compileStatus;
+        : documents.dirtyCount > 0 && compiler.status === 'Ready' ? 'Unsaved' : compiler.status;
 
     const handleFileSelect = async (path: string, content: string) => {
         try {
@@ -83,16 +42,13 @@ function App() {
             const content = project.root_file
                 ? await invoke<string>("read_file_content", { path: project.root_file }) : null;
             documents.reset();
-            setPdfPath(null);
-            setPdfRevision(0);
-            setCompileError(null);
-            setCompileStatus('Ready');
+            setProjectError(null);
             setProjectPath(project.path);
             setRootFile(project.root_file);
             setTexFiles(project.tex_files);
             if (project.root_file && content !== null) documents.openDocument(project.root_file, content);
         } catch (failure) {
-            setCompileError(String(failure));
+            setProjectError(String(failure));
         }
     };
 
@@ -103,19 +59,15 @@ function App() {
             const project = await invoke<ProjectInfo>("set_project_root", { projectPath, filePath: path });
             setRootFile(project.root_file);
             setTexFiles(project.tex_files);
-            setPdfPath(null);
+            setProjectError(null);
         } catch (failure) {
-            setCompileError(String(failure));
+            setProjectError(String(failure));
         }
     };
 
-    useEffect(() => {
-        void handleCompile();
-    }, [handleCompile]);
-
     const handleSave = async () => {
         try {
-            if (!await documents.saveDocument(filePath)) await handleCompile();
+            if (!await documents.saveDocument(filePath)) compiler.requestCompile();
         } catch {
             return;
         }
@@ -191,10 +143,10 @@ function App() {
                             <Panel defaultSize={40} minSize={20}>
                                 <div className="h-full w-full bg-slate-950">
                                     <PDFPreview
-                                        pdfPath={pdfPath}
-                                        pdfRevision={pdfRevision}
+                                        pdfPath={compiler.pdfPath}
+                                        pdfRevision={compiler.pdfRevision}
                                         compiling={status === 'Compiling...'}
-                                        error={documents.error || compileError}
+                                        error={documents.error || projectError || compiler.error}
                                     />
                                 </div>
                             </Panel>
