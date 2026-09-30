@@ -37,7 +37,7 @@ describe("document save safety", () => {
 
         await act(() => vi.advanceTimersByTimeAsync(1000));
 
-        expect(invoke).toHaveBeenCalledWith("save_file", { path: "/first.tex", content: "edited" });
+        expect(invoke).toHaveBeenCalledWith("save_file", { path: "/first.tex", content: "edited", expectedContent: "original" });
         expect(result.current.activePath).toBe("/second.tex");
         expect(result.current.dirtyCount).toBe(0);
     });
@@ -60,7 +60,7 @@ describe("document save safety", () => {
             await Promise.all([firstSave, secondSave]);
         });
 
-        expect(invoke).toHaveBeenNthCalledWith(2, "save_file", { path: "/first.tex", content: "latest edit" });
+        expect(invoke).toHaveBeenNthCalledWith(2, "save_file", { path: "/first.tex", content: "latest edit", expectedContent: "first edit" });
         expect(result.current.activeDocument?.savedContent).toBe("latest edit");
         expect(result.current.dirtyCount).toBe(0);
     });
@@ -77,7 +77,7 @@ describe("document save safety", () => {
 
         await act(async () => { finishFirst(); await flushing; });
 
-        expect(invoke).toHaveBeenLastCalledWith("save_file", { path: "/first.tex", content: "latest edit" });
+        expect(invoke).toHaveBeenLastCalledWith("save_file", { path: "/first.tex", content: "latest edit", expectedContent: "first edit" });
         expect(result.current.dirtyCount).toBe(0);
     });
 
@@ -94,7 +94,7 @@ describe("document save safety", () => {
 
         await act(async () => { finishFirst(); await flushing; });
 
-        expect(invoke).toHaveBeenLastCalledWith("save_file", { path: "/first.tex", content: "original" });
+        expect(invoke).toHaveBeenLastCalledWith("save_file", { path: "/first.tex", content: "original", expectedContent: "temporary" });
         expect(result.current.dirtyCount).toBe(0);
     });
 
@@ -162,5 +162,40 @@ describe("document save safety", () => {
         await act(() => vi.advanceTimersByTimeAsync(1000));
         expect(invoke).not.toHaveBeenCalled();
         expect(result.current.activePath).toBe("");
+    });
+
+    it("reloads externally edited clean documents", async () => {
+        const { result } = renderHook(() => useDocuments(vi.fn()));
+        act(() => result.current.openDocument("/first.tex", "original"));
+        invoke.mockResolvedValueOnce("external edit");
+        await act(async () => { await result.current.refreshDocument("/first.tex"); });
+        expect(result.current.activeDocument?.content).toBe("external edit");
+        expect(result.current.dirtyCount).toBe(0);
+    });
+
+    it("preserves both versions on conflict and saves only after an explicit choice", async () => {
+        const { result } = renderHook(() => useDocuments(vi.fn()));
+        act(() => result.current.openDocument("/first.tex", "original"));
+        act(() => result.current.updateDocument("/first.tex", "local edit"));
+        invoke.mockResolvedValueOnce("external edit");
+        await act(async () => { await result.current.refreshDocument("/first.tex"); });
+        expect(result.current.activeDocument?.content).toBe("local edit");
+        expect(result.current.activeDocument?.externalContent).toBe("external edit");
+        await act(async () => { await expect(result.current.flushAll()).rejects.toThrow("Resolve the disk conflict"); });
+        act(() => result.current.resolveConflict("/first.tex", "local"));
+        await act(async () => result.current.flushAll());
+        expect(invoke).toHaveBeenLastCalledWith("save_file", { path: "/first.tex", content: "local edit", expectedContent: "external edit" });
+    });
+
+    it("handles a native conflict even when a watcher event has not arrived", async () => {
+        const { result } = renderHook(() => useDocuments(vi.fn()));
+        act(() => result.current.openDocument("/first.tex", "original"));
+        act(() => result.current.updateDocument("/first.tex", "local edit"));
+        invoke.mockRejectedValueOnce({ message: "File changed", disk_content: "external edit" });
+        await act(async () => { await result.current.flushAll().catch(() => undefined); });
+        expect(result.current.activeDocument?.externalContent).toBe("external edit");
+        act(() => result.current.resolveConflict("/first.tex", "disk"));
+        expect(result.current.activeDocument?.content).toBe("external edit");
+        expect(result.current.dirtyCount).toBe(0);
     });
 });

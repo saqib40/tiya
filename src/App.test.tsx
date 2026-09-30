@@ -21,6 +21,7 @@ vi.mock("./components/Home", () => ({
 }));
 vi.mock("./components/Sidebar", () => ({
     default: ({ onFileSelect }: { onFileSelect: (path: string, content: string) => void }) => <>
+        <button onClick={() => onFileSelect("/project/main.tex", "Root document")}>Open root</button>
         <button onClick={() => onFileSelect("/project/chapter.tex", "Chapter")}>Open chapter</button>
         <button onClick={() => onFileSelect("/project/references.bib", "Bibliography")}>Open bibliography</button>
     </>,
@@ -75,7 +76,7 @@ describe("project compilation", () => {
         await waitFor(() => {
             expect(invoke.mock.calls.filter(([command]) => command === "compile_preview")).toHaveLength(2);
         });
-        expect(invoke).toHaveBeenCalledWith("save_file", { path: "/project/references.bib", content: "Updated bibliography" });
+        expect(invoke).toHaveBeenCalledWith("save_file", { path: "/project/references.bib", content: "Updated bibliography", expectedContent: "Bibliography" });
         expect(invoke.mock.calls.filter(([command]) => command === "compile_preview").slice(-1)[0])
             .toEqual(["compile_preview", { filePath: "/project/main.tex", requestId: expect.any(String) }]);
     });
@@ -102,5 +103,22 @@ describe("project compilation", () => {
             { file: "C:\\My Papers\\paper.tex", line: 12, column: 3, message: "Undefined control sequence", severity: "error" },
             { file: "chapter.tex", line: 4, column: 1, message: "Missing reference", severity: "warning" },
         ]);
+    });
+
+    it("allows file navigation without discarding a conflicting buffer", async () => {
+        const normalInvoke = invoke.getMockImplementation()!;
+        invoke.mockImplementation(async (command, payload) => {
+            if (command === "save_file") throw { message: "File changed", disk_content: "External root" };
+            return normalInvoke(command, payload);
+        });
+        render(<App />);
+        fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+        await screen.findByDisplayValue("Root document");
+        fireEvent.change(screen.getByRole("textbox", { name: "Source" }), { target: { value: "Local root edit" } });
+        fireEvent.click(screen.getByRole("button", { name: "Open chapter" }));
+        await screen.findByDisplayValue("Chapter");
+        fireEvent.click(screen.getByRole("button", { name: "Open root" }));
+        await screen.findByDisplayValue("Local root edit");
+        expect(screen.getByRole("button", { name: "Use disk version" })).toBeInTheDocument();
     });
 });

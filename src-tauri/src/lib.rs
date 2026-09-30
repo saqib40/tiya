@@ -81,15 +81,8 @@ fn unwatch_directory(watch_id: String, state: tauri::State<'_, watcher::WatchSta
 }
 
 #[tauri::command]
-fn save_file(path: String, content: String) -> Result<(), String> {
-    println!("Saving file to path: {}", path);
-    println!("Content length: {} bytes", content.len());
-    filesystem::save_file(Path::new(&path), &content).map_err(|e| {
-        println!("Error writing file: {}", e);
-        e.to_string()
-    })?;
-    println!("File saved successfully");
-    Ok(())
+fn save_file(path: String, content: String, expected_content: String) -> Result<(), filesystem::SaveFailure> {
+    filesystem::save_checked(Path::new(&path), &content, &expected_content)
 }
 
 #[tauri::command]

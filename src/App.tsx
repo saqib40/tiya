@@ -33,11 +33,13 @@ function App() {
     const handleFileSelect = async (path: string, content: string) => {
         try {
             await documents.flushAll();
+        } catch {
             documents.openDocument(path, content);
             setEditorLocation(null);
-        } catch {
             return;
         }
+        documents.openDocument(path, content);
+        setEditorLocation(null);
     };
 
     const handleProjectSelect = async (path: string) => {
@@ -121,6 +123,17 @@ function App() {
         compiler.sourceSaved();
     };
 
+    const handleFilesChanged = async (paths: string[]) => {
+        if (!projectPath) return;
+        const affected = Object.keys(documents.buffers).filter(file => paths.some(path => file === path || file.startsWith(`${path}/`) || file.startsWith(`${path}\\`)));
+        const refreshed = await Promise.all(affected.map(documents.refreshDocument));
+        const untracked = paths.some(path => !affected.includes(path));
+        const project = await invoke<ProjectInfo>("load_project", { path: projectPath });
+        setTexFiles(project.tex_files);
+        setRootFile(project.root_file);
+        if (untracked || refreshed.some(Boolean)) compiler.sourceSaved();
+    };
+
     return (
         <div className="h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden flex flex-col font-sans">
             <TitleBar />
@@ -179,6 +192,7 @@ function App() {
                                     onFileSelect={handleFileSelect}
                                     beforeMutation={documents.flushAll}
                                     onMutation={handleMutation}
+                                    onFilesChanged={handleFilesChanged}
                                 />
                             </Panel>
 
@@ -192,7 +206,15 @@ function App() {
                                             {filePath ? relativePath(projectPath, filePath) : "No file selected"}
                                         </div>
                                     </div>
-                                    <div className="flex-1 overflow-hidden">
+                                    <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                                        {documents.activeDocument?.externalContent !== undefined && <div className="max-h-48 overflow-auto border-b border-amber-800 bg-amber-950 px-3 py-2 text-xs text-amber-100">
+                                            <div className="mb-2">File changed on disk</div>
+                                            <div className="flex flex-wrap gap-3">
+                                                <button onClick={() => documents.resolveConflict(filePath, 'disk')} className="underline">Use disk version</button>
+                                                <button onClick={() => documents.resolveConflict(filePath, 'local')} className="underline">Keep my edits</button>
+                                            </div>
+                                            <details className="mt-2"><summary>Disk version</summary><pre className="whitespace-pre-wrap break-words">{documents.activeDocument.externalContent}</pre></details>
+                                        </div>}
                                         {activeFileContent !== null ? (
                                             <CodeEditor
                                                 code={activeFileContent}

@@ -165,7 +165,7 @@ const CodeEditor = ({ code, onChange, onSave, location }: CodeEditorProps) => {
     }, [code]);
 
     return (
-        <div className="h-full w-full relative overflow-hidden bg-slate-950">
+        <div className="h-full min-h-0 w-full flex-1 relative overflow-hidden bg-slate-950">
             {/* Pasting Overlay */}
             {isPasting && (
                 <div className="absolute inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center gap-3">

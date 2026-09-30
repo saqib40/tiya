@@ -6,6 +6,7 @@ export interface DocumentBuffer {
     path: string;
     content: string;
     savedContent: string;
+    externalContent?: string;
 }
 
 export function useDocuments(onSaved: (path: string) => void) {
@@ -45,11 +46,12 @@ export function useDocuments(onSaved: (path: string) => void) {
         const task = previous.catch(() => false).then(async () => {
             const buffer = buffersRef.current[path];
             if (!buffer || buffer.content === buffer.savedContent) return false;
+            if (buffer.externalContent !== undefined) throw new Error(`Resolve the disk conflict in ${path} before saving`);
 
             setSavingCount(count => count + 1);
             setError(null);
             try {
-                await invoke("save_file", { path, content: buffer.content });
+                await invoke("save_file", { path, content: buffer.content, expectedContent: buffer.savedContent });
                 const current = buffersRef.current[path];
                 if (current) {
                     publish({ ...buffersRef.current, [path]: { ...current, savedContent: buffer.content } });
@@ -57,7 +59,12 @@ export function useDocuments(onSaved: (path: string) => void) {
                 onSavedRef.current(path);
                 return true;
             } catch (failure) {
-                setError(`Could not save ${path}: ${String(failure)}`);
+                const detail = failure as { message?: string; disk_content?: string } | null;
+                const current = buffersRef.current[path];
+                if (current && typeof detail?.disk_content === "string") {
+                    publish({ ...buffersRef.current, [path]: { ...current, externalContent: detail.disk_content } });
+                }
+                setError(`Could not save ${path}: ${detail?.message ?? String(failure)}`);
                 throw failure;
             } finally {
                 setSavingCount(count => count - 1);
@@ -106,8 +113,40 @@ export function useDocuments(onSaved: (path: string) => void) {
         setError(null);
     }, [publish]);
 
+    const refreshDocument = useCallback(async (path: string) => {
+        await pending.current.get(path)?.catch(() => undefined);
+        if (!buffersRef.current[path]) return true;
+        try {
+            const diskContent = await invoke<string>("read_file_content", { path });
+            const current = buffersRef.current[path];
+            if (!current || pending.current.has(path) || diskContent === current.savedContent) return false;
+            if (current.content === current.savedContent || current.content === diskContent) {
+                publish({ ...buffersRef.current, [path]: { ...current, content: diskContent, savedContent: diskContent, externalContent: undefined } });
+            } else {
+                publish({ ...buffersRef.current, [path]: { ...current, externalContent: diskContent } });
+                setError(`External changes detected in ${path}`);
+            }
+            return true;
+        } catch (failure) {
+            setError(`Could not reload ${path}: ${String(failure)}`);
+            return true;
+        }
+    }, [publish]);
+
+    const resolveConflict = useCallback((path: string, choice: 'disk' | 'local') => {
+        const current = buffersRef.current[path];
+        if (current?.externalContent === undefined) return;
+        publish({ ...buffersRef.current, [path]: {
+            ...current,
+            content: choice === 'disk' ? current.externalContent : current.content,
+            savedContent: current.externalContent,
+            externalContent: undefined,
+        } });
+        setError(null);
+    }, [publish]);
+
     useEffect(() => {
-        if (!Object.values(buffers).some(buffer => buffer.content !== buffer.savedContent)) return;
+        if (!Object.values(buffers).some(buffer => buffer.content !== buffer.savedContent && buffer.externalContent === undefined)) return;
         const timer = setTimeout(() => {
             void flushAll().catch(() => undefined);
         }, 1000);
@@ -160,5 +199,7 @@ export function useDocuments(onSaved: (path: string) => void) {
         reset,
         relocateDocuments,
         removeDocuments,
+        refreshDocument,
+        resolveConflict,
     };
 }

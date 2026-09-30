@@ -1,6 +1,30 @@
+use serde::Serialize;
 use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
+
+#[derive(Debug, Serialize)]
+pub struct SaveFailure {
+    pub message: String,
+    pub disk_content: Option<String>,
+}
+
+pub fn save_checked(path: &Path, content: &str, expected: &str) -> Result<(), SaveFailure> {
+    let disk_content = fs::read_to_string(path).map_err(|error| SaveFailure {
+        message: error.to_string(),
+        disk_content: None,
+    })?;
+    if disk_content != expected {
+        return Err(SaveFailure {
+            message: "This file changed on disk. Review the disk version before saving.".into(),
+            disk_content: Some(disk_content),
+        });
+    }
+    save_file(path, content).map_err(|error| SaveFailure {
+        message: error.to_string(),
+        disk_content: None,
+    })
+}
 
 pub fn create_file(path: &Path) -> io::Result<()> {
     OpenOptions::new().write(true).create_new(true).open(path)?;
@@ -85,6 +109,25 @@ pub fn save_file(path: &Path, content: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn refuses_to_overwrite_external_changes() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("main.tex");
+        fs::write(&path, "external edit").unwrap();
+        let failure = save_checked(&path, "local edit", "original").unwrap_err();
+        assert_eq!(failure.disk_content.as_deref(), Some("external edit"));
+        assert_eq!(fs::read_to_string(path).unwrap(), "external edit");
+    }
+
+    #[test]
+    fn saves_when_the_disk_version_matches() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("main.tex");
+        fs::write(&path, "original").unwrap();
+        save_checked(&path, "edited", "original").unwrap();
+        assert_eq!(fs::read_to_string(path).unwrap(), "edited");
+    }
 
     #[test]
     fn moving_a_file_never_overwrites_an_existing_destination() {
