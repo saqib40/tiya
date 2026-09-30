@@ -264,7 +264,7 @@ function App() {
                     <div className="flex-1 relative overflow-hidden">
                         <Group orientation="horizontal" className="absolute inset-0">
                             {/* Left Sidebar */}
-                            <Panel defaultSize={20} minSize={15}>
+                            <Panel defaultSize="20%" minSize="15%">
                                 <Sidebar
                                     initialPath={projectPath}
                                     rootFile={rootFile}
@@ -280,7 +280,7 @@ function App() {
                             <Separator className="w-1 bg-slate-800/10 hover:bg-blue-600/20 transition-colors cursor-col-resize active:bg-blue-600/40" />
 
                             {/* Middle Editor Area */}
-                            <Panel defaultSize={40} minSize={20}>
+                            <Panel defaultSize="40%" minSize="20%">
                                 <div className="h-full w-full flex flex-col border-r border-white/5 bg-slate-950">
                                     <div role="tablist" aria-label="Open files" className="flex shrink-0 overflow-x-auto border-b border-white/5 bg-slate-900/50">
                                         {Object.values(documents.buffers).map(buffer => <div key={buffer.path} className={`flex shrink-0 items-center border-r border-slate-800 ${buffer.path === filePath ? 'bg-slate-800' : ''}`}>
@@ -340,7 +340,7 @@ function App() {
                             <Separator className="w-1 bg-slate-800/10 hover:bg-blue-600/20 transition-colors cursor-col-resize active:bg-blue-600/40" />
 
                             {/* Right Preview Area */}
-                            <Panel defaultSize={40} minSize={20}>
+                            <Panel defaultSize="40%" minSize="20%">
                                 <div className="h-full w-full bg-slate-950">
                                     <PDFPreview
                                         pdfPath={compiler.pdfPath}

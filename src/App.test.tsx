@@ -12,7 +12,7 @@ vi.mock("@tauri-apps/api/window", () => ({
 }));
 vi.mock("react-resizable-panels", () => ({
     Group: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-    Panel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    Panel: ({ children, defaultSize }: { children: React.ReactNode; defaultSize?: number | string }) => <div data-testid="panel" data-default-size={defaultSize}>{children}</div>,
     Separator: () => null,
 }));
 vi.mock("./components/TitleBar", () => ({ default: () => null }));
@@ -58,6 +58,7 @@ describe("project compilation", () => {
         fireEvent.click(screen.getByRole("button", { name: "Open project" }));
         await screen.findByText("PDF: /project/main.pdf");
         expect(screen.getByRole("combobox", { name: "Root document" })).toHaveValue("/project/main.tex");
+        expect(screen.getAllByTestId('panel').map(panel => panel.dataset.defaultSize)).toEqual(['20%', '40%', '40%']);
 
         fireEvent.click(screen.getByRole("button", { name: "Open chapter" }));
         await screen.findByDisplayValue("Chapter");
