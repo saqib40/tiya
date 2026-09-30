@@ -6,6 +6,17 @@ use notify::{Watcher, RecursiveMode, RecommendedWatcher, Config};
 use std::sync::mpsc::channel;
 
 mod filesystem;
+mod project;
+
+#[tauri::command]
+fn load_project(path: String) -> Result<project::ProjectInfo, String> {
+    project::load_project(Path::new(&path))
+}
+
+#[tauri::command]
+fn set_project_root(project_path: String, file_path: String) -> Result<project::ProjectInfo, String> {
+    project::set_root(Path::new(&project_path), Path::new(&file_path))
+}
 
 #[derive(Serialize, Clone)]
 pub struct FileNode {
@@ -64,6 +75,7 @@ async fn compile_preview(app_handle: tauri::AppHandle, file_path: String) -> Res
         .shell()
         .sidecar("tectonic")
         .map_err(|e| format!("Failed to create sidecar command: {}", e))?
+        .current_dir(parent_dir)
         .args(["-X", "compile", "--outdir", &parent_dir.to_string_lossy(), &file_path])
         .output()
         .await
@@ -161,6 +173,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            load_project,
+            set_project_root,
             open_directory,
             read_file_content,
             compile_preview,

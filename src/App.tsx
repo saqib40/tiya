@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { Panel, Group, Separator } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
 import { Loader2, CheckCircle2, AlertCircle, FileText } from "lucide-react";
@@ -6,6 +6,7 @@ import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
 import CodeEditor from "./components/CodeEditor";
 import { useDocuments } from "./hooks/useDocuments";
+import { ProjectInfo, relativePath } from "./lib/project";
 
 import Home from "./components/Home";
 import TitleBar from "./components/TitleBar";
@@ -25,16 +26,18 @@ function cleanError(raw: string): string {
 
 function App() {
     const [projectPath, setProjectPath] = useState<string | null>(null);
+    const [rootFile, setRootFile] = useState<string | null>(null);
+    const [texFiles, setTexFiles] = useState<string[]>([]);
     const [pdfPath, setPdfPath] = useState<string | null>(null);
     const [pdfRevision, setPdfRevision] = useState<number>(0);
     const [compileStatus, setCompileStatus] = useState<PipelineStatus>('Ready');
     const [compileError, setCompileError] = useState<string | null>(null);
 
-    const handleCompile = useCallback(async (path: string) => {
-        if (!path.toLowerCase().endsWith(".tex")) return;
+    const handleCompile = useCallback(async () => {
+        if (!rootFile) return;
         setCompileStatus('Compiling...');
         try {
-            const result: string = await invoke("compile_preview", { filePath: path });
+            const result: string = await invoke("compile_preview", { filePath: rootFile });
             setPdfPath(result);
             setPdfRevision(prev => prev + 1);
             setCompileError(null);
@@ -56,7 +59,7 @@ function App() {
             setCompileError(cleanError(raw));
             setCompileStatus('Error');
         }
-    }, []);
+    }, [rootFile]);
 
     const documents = useDocuments(handleCompile);
     const filePath = documents.activePath;
@@ -68,10 +71,6 @@ function App() {
         try {
             await documents.flushAll();
             documents.openDocument(path, content);
-            setPdfPath(null);
-            setPdfRevision(0);
-            setCompileError(null);
-            await handleCompile(path);
         } catch {
             return;
         }
@@ -80,20 +79,43 @@ function App() {
     const handleProjectSelect = async (path: string) => {
         try {
             await documents.flushAll();
+            const project = await invoke<ProjectInfo>("load_project", { path });
+            const content = project.root_file
+                ? await invoke<string>("read_file_content", { path: project.root_file }) : null;
             documents.reset();
             setPdfPath(null);
             setPdfRevision(0);
             setCompileError(null);
             setCompileStatus('Ready');
-            setProjectPath(path);
-        } catch {
-            return;
+            setProjectPath(project.path);
+            setRootFile(project.root_file);
+            setTexFiles(project.tex_files);
+            if (project.root_file && content !== null) documents.openDocument(project.root_file, content);
+        } catch (failure) {
+            setCompileError(String(failure));
         }
     };
 
+    const handleRootSelect = async (path: string) => {
+        if (!projectPath || !path) return;
+        try {
+            await documents.flushAll();
+            const project = await invoke<ProjectInfo>("set_project_root", { projectPath, filePath: path });
+            setRootFile(project.root_file);
+            setTexFiles(project.tex_files);
+            setPdfPath(null);
+        } catch (failure) {
+            setCompileError(String(failure));
+        }
+    };
+
+    useEffect(() => {
+        void handleCompile();
+    }, [handleCompile]);
+
     const handleSave = async () => {
         try {
-            if (!await documents.saveDocument(filePath)) await handleCompile(filePath);
+            if (!await documents.saveDocument(filePath)) await handleCompile();
         } catch {
             return;
         }
@@ -107,6 +129,18 @@ function App() {
                 <Home onProjectSelect={handleProjectSelect} />
             ) : (
                 <>
+                    <div className="flex items-center gap-3 border-b border-white/5 bg-slate-900 px-4 py-2 text-xs">
+                        <label htmlFor="root-document" className="shrink-0 text-slate-400">Root document</label>
+                        <select
+                            id="root-document"
+                            value={rootFile ?? ""}
+                            onChange={event => void handleRootSelect(event.target.value)}
+                            className="min-w-0 max-w-sm flex-1 rounded border border-slate-700 bg-slate-950 px-2 py-1 text-slate-200"
+                        >
+                            <option value="" disabled>Choose a root document</option>
+                            {texFiles.map(path => <option key={path} value={path}>{relativePath(projectPath, path)}</option>)}
+                        </select>
+                    </div>
                     <div className="flex-1 relative overflow-hidden">
                         <Group orientation="horizontal" className="absolute inset-0">
                             {/* Left Sidebar */}
@@ -125,7 +159,7 @@ function App() {
                                 <div className="h-full w-full flex flex-col border-r border-white/5 bg-slate-950">
                                     <div className="px-4 py-3 bg-slate-900/50 border-b border-white/5 flex items-center justify-between">
                                         <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest truncate">
-                                            {filePath ? filePath.split('/').pop() : "No file selected"}
+                                            {filePath ? relativePath(projectPath, filePath) : "No file selected"}
                                         </div>
                                     </div>
                                     <div className="flex-1 overflow-hidden">
