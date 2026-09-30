@@ -142,7 +142,7 @@ describe("project compilation", () => {
         expect(readWorkspace().automaticCompile).toBe(false);
         fireEvent.click(screen.getByRole("button", { name: "Close project" }));
         await screen.findByRole("button", { name: "Open project" });
-        expect(readWorkspace().lastProject).toBeNull();
+        await waitFor(() => expect(readWorkspace().lastProject).toBeNull());
         expect(readWorkspace().recentProjects).toEqual(["/project"]);
     });
 });
