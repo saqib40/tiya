@@ -108,6 +108,16 @@ async fn run_command(
     }
 }
 
+pub fn export_pdf(source: &Path, destination: &Path) -> Result<(), String> {
+    if !destination
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("pdf"))
+    {
+        return Err("Choose a PDF file name".into());
+    }
+    publish_output(source, destination, true)
+}
+
 fn publish_output(source: &Path, destination: &Path, is_pdf: bool) -> Result<(), String> {
     let mut input = fs::File::open(source).map_err(|error| error.to_string())?;
     if is_pdf {
@@ -279,6 +289,17 @@ mod tests {
             .unwrap_err();
         assert!(error.contains("Compilation failed"));
         assert!(error.contains("invalid-tiya-test-option"));
+    }
+
+    #[test]
+    fn exports_pdf_without_changing_the_source() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("main.pdf");
+        let destination = directory.path().join("export.pdf");
+        fs::write(&source, "%PDF-test").unwrap();
+        export_pdf(&source, &destination).unwrap();
+        assert_eq!(fs::read(&source).unwrap(), fs::read(&destination).unwrap());
+        assert!(export_pdf(&source, &directory.path().join("main.tex")).is_err());
     }
 
     #[test]

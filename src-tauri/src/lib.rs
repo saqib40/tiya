@@ -71,6 +71,20 @@ fn cancel_compile(state: tauri::State<'_, compiler::CompilerState>, request_id: 
 }
 
 #[tauri::command]
+fn export_pdf(source: String, destination: String) -> Result<(), String> {
+    compiler::export_pdf(Path::new(&source), Path::new(&destination))
+}
+
+#[tauri::command]
+fn open_pdf(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    if !Path::new(&path).is_file() || !Path::new(&path).extension().is_some_and(|extension| extension.eq_ignore_ascii_case("pdf")) {
+        return Err("Select an existing PDF".into());
+    }
+    app.opener().open_path(path, None::<&str>).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 fn watch_directory(path: String, root_file: Option<String>, watch_id: String, window: Window, state: tauri::State<'_, watcher::WatchState>) -> Result<(), String> {
     watcher::start(&state, Path::new(&path), root_file.map(Into::into), watch_id, window)
 }
@@ -133,6 +147,8 @@ pub fn run() {
             read_file_content,
             compile_preview,
             cancel_compile,
+            export_pdf,
+            open_pdf,
             save_file,
             create_file,
             create_directory,
