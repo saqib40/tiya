@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
+import { parseDiagnostics } from "./lib/diagnostics";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -77,5 +78,29 @@ describe("project compilation", () => {
         expect(invoke).toHaveBeenCalledWith("save_file", { path: "/project/references.bib", content: "Updated bibliography" });
         expect(invoke.mock.calls.filter(([command]) => command === "compile_preview").slice(-1)[0])
             .toEqual(["compile_preview", { filePath: "/project/main.tex", requestId: expect.any(String) }]);
+    });
+
+    it("opens a diagnostic source through project-scoped resolution", async () => {
+        const normalInvoke = invoke.getMockImplementation()!;
+        invoke.mockImplementation(async (command, payload) => {
+            if (command === "compile_preview") throw "Compilation failed.\nerror: chapter.tex:7: Undefined control sequence";
+            if (command === "resolve_project_file") return "/project/chapter.tex";
+            return normalInvoke(command, payload);
+        });
+        render(<App />);
+        fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+        fireEvent.click(await screen.findByRole("button", { name: "chapter.tex:7 Undefined control sequence" }));
+        await waitFor(() => expect(invoke).toHaveBeenCalledWith("resolve_project_file", {
+            projectPath: "/project", rootFile: "/project/main.tex", requestedPath: "chapter.tex",
+        }));
+        expect(invoke).toHaveBeenCalledWith("read_file_content", { path: "/project/chapter.tex" });
+    });
+
+    it("recognizes Windows paths, columns, warnings, and duplicate diagnostics", () => {
+        const message = "error: C:\\My Papers\\paper.tex:12:3: Undefined control sequence";
+        expect(parseDiagnostics(`${message}\n${message}\nwarning: chapter.tex:4: Missing reference`)).toEqual([
+            { file: "C:\\My Papers\\paper.tex", line: 12, column: 3, message: "Undefined control sequence", severity: "error" },
+            { file: "chapter.tex", line: 4, column: 1, message: "Missing reference", severity: "warning" },
+        ]);
     });
 });

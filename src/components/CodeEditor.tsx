@@ -2,17 +2,32 @@ import { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
 import { Loader2 } from 'lucide-react';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
+import { EditorLocation } from '../lib/diagnostics';
 
 interface CodeEditorProps {
     code: string;
     onChange: (value: string | undefined) => void;
     onSave?: () => void;
+    location?: EditorLocation | null;
 }
 
-const CodeEditor = ({ code, onChange, onSave }: CodeEditorProps) => {
+const CodeEditor = ({ code, onChange, onSave, location }: CodeEditorProps) => {
     const editorRef = useRef<any>(null);
     const onSaveRef = useRef(onSave);
     const [isPasting, setIsPasting] = useState(false);
+    const locationRef = useRef(location);
+
+    const revealLocation = (target: EditorLocation | null | undefined) => {
+        if (!target || !editorRef.current) return;
+        editorRef.current.setPosition({ lineNumber: target.line, column: target.column });
+        editorRef.current.revealLineInCenter(target.line);
+        editorRef.current.focus();
+    };
+
+    useEffect(() => {
+        locationRef.current = location;
+        revealLocation(location);
+    }, [location]);
 
     useEffect(() => {
         onSaveRef.current = onSave;
@@ -79,6 +94,7 @@ const CodeEditor = ({ code, onChange, onSave }: CodeEditorProps) => {
 
     const handleEditorDidMount: OnMount = (editor, monaco) => {
         editorRef.current = editor;
+        revealLocation(locationRef.current);
 
         // Unified Paste Handler (Tauri System Clipboard + Anti-Freeze UX)
         const performPaste = async () => {

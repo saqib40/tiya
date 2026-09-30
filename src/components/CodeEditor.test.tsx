@@ -9,6 +9,9 @@ const { commands, editor } = vi.hoisted(() => {
         editor: {
             getValue: vi.fn(() => "original"),
             setValue: vi.fn(),
+            setPosition: vi.fn(),
+            revealLineInCenter: vi.fn(),
+            focus: vi.fn(),
             getDomNode: vi.fn(() => null),
             addCommand: vi.fn((key: number, callback: () => void) => commands.set(key, callback)),
         },
@@ -55,5 +58,13 @@ describe("editor save shortcut", () => {
         commands.get(2048 | 49)!();
 
         expect(save).toHaveBeenCalledExactlyOnceWith("second.tex");
+    });
+
+    it("reveals a diagnostic on mount and on subsequent navigation", () => {
+        const { rerender } = render(<CodeEditor code="text" onChange={vi.fn()} location={{ line: 7, column: 2, revision: 1 }} />);
+        expect(editor.setPosition).toHaveBeenLastCalledWith({ lineNumber: 7, column: 2 });
+        rerender(<CodeEditor code="text" onChange={vi.fn()} location={{ line: 14, column: 1, revision: 2 }} />);
+        expect(editor.revealLineInCenter).toHaveBeenLastCalledWith(14);
+        expect(editor.focus).toHaveBeenCalled();
     });
 });

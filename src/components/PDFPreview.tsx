@@ -8,7 +8,8 @@ import {
     ZoomOut,
     Maximize,
     ChevronLeft,
-    ChevronRight
+    ChevronRight,
+    RefreshCw
 } from 'lucide-react';
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -32,14 +33,15 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error }: PDFP
     const [scale, setScale] = useState<number>(1.0);
     const [fitToWidth, setFitToWidth] = useState<boolean>(true);
     const [loadError, setLoadError] = useState<string | null>(null);
+    const [reloadRevision, setReloadRevision] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Cache-busted URL
     const assetUrl = useMemo(() => {
         if (!pdfPath) return null;
         const base = convertFileSrc(pdfPath);
-        return `${base}?rev=${pdfRevision}`;
-    }, [pdfPath, pdfRevision]);
+        return `${base}?rev=${pdfRevision}&reload=${reloadRevision}`;
+    }, [pdfPath, pdfRevision, reloadRevision]);
 
     useEffect(() => {
         setLoadError(null);
@@ -120,7 +122,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error }: PDFP
 
             {/* Floating Glass Header */}
             {pdfPath && (
-                <div className="absolute top-4 left-1/2 -translate-x-1/2 z-50 flex items-center bg-slate-900/80 backdrop-blur-md border border-slate-700/50 rounded-full px-4 py-2 gap-4 shadow-2xl ring-1 ring-white/5 animate-in fade-in slide-in-from-top-4 duration-300">
+                <div className="flex shrink-0 flex-wrap items-center border-b border-slate-800 bg-slate-900 px-3 py-2 gap-3">
                     <div className="flex items-center gap-1">
                         <button
                             onClick={zoomOut}
@@ -168,33 +170,15 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error }: PDFP
                 </div>
             )}
 
-            {/* Scrollable Viewport */}
-            <div className="flex-1 overflow-auto custom-scrollbar flex flex-col items-center p-8 pt-24 min-h-full">
-                {(error || loadError) && (
-                    <div className="w-full h-full flex items-center justify-center">
-                        <div className="max-w-2xl w-full bg-red-950/40 border border-red-800/50 rounded-2xl p-6 shadow-2xl">
-                            <div className="flex items-center gap-2 mb-3">
-                                <AlertCircle className="w-5 h-5 text-red-500" />
-                                <span className="text-xs font-black uppercase tracking-widest text-red-400">
-                                    {error ? 'LaTeX Compilation Error' : 'PDF Preview Error'}
-                                </span>
-                            </div>
-                            <pre className="text-sm whitespace-pre-wrap font-mono text-red-200 leading-relaxed">
-                                {error || loadError}
-                            </pre>
-                        </div>
-                    </div>
-                )}
-
-                {/* Compiling Overlay */}
-                {compiling && (
-                    <div className="fixed inset-0 pointer-events-none z-40 bg-slate-950/20 backdrop-blur-[1px] flex items-center justify-center transition-opacity duration-300">
-                        <div className="p-4 bg-slate-900/90 border border-white/5 rounded-2xl shadow-2xl flex flex-col items-center gap-3 scale-95 animate-pulse">
-                            <Loader2 className="w-8 h-8 text-blue-500 animate-spin" strokeWidth={3} />
-                            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-blue-400">Compiling</span>
-                        </div>
-                    </div>
-                )}
+            {(compiling || error) && <div role="status" className="flex shrink-0 items-center gap-2 border-b border-slate-800 px-3 py-2 text-xs text-amber-200">
+                {compiling ? <Loader2 size={14} className="shrink-0 animate-spin" /> : <AlertCircle size={14} className="shrink-0" />}
+                <span>{compiling ? 'Building PDF...' : pdfPath ? 'Preview from last successful build' : 'Build failed'}</span>
+            </div>}
+            {loadError && <div role="alert" className="flex shrink-0 items-center gap-2 border-b border-red-800 bg-red-950 px-3 py-2 text-xs text-red-200">
+                <span className="min-w-0 flex-1 break-words">{loadError}</span>
+                <button aria-label="Retry PDF preview" title="Retry PDF preview" onClick={() => setReloadRevision(value => value + 1)} className="shrink-0 p-1"><RefreshCw size={16} /></button>
+            </div>}
+            <div className="min-h-0 flex-1 overflow-auto custom-scrollbar flex flex-col items-center p-4">
 
                 {!pdfPath && !compiling && !error && !loadError && (
                     <div className="flex-1 flex flex-col items-center justify-center gap-6 select-none h-full min-h-[400px]">
@@ -211,7 +195,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error }: PDFP
                     </div>
                 )}
 
-                {pdfPath && !error && !loadError && (
+                {pdfPath && !loadError && (
                     <Document
                         file={assetUrl}
                         onLoadSuccess={onDocumentLoadSuccess}

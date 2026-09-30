@@ -86,6 +86,24 @@ pub fn load_project(path: &Path) -> Result<ProjectInfo, String> {
     })
 }
 
+pub fn resolve_file(project: &Path, root: &Path, requested: &Path) -> Result<PathBuf, String> {
+    let directory = fs::canonicalize(project).map_err(|error| error.to_string())?;
+    let root = fs::canonicalize(root).map_err(|error| error.to_string())?;
+    if !root.starts_with(&directory) {
+        return Err("The root document is outside this project".into());
+    }
+    let resolved = fs::canonicalize(
+        root.parent()
+            .ok_or("Invalid root document")?
+            .join(requested),
+    )
+    .map_err(|error| format!("Source file is not available in this project: {error}"))?;
+    if !resolved.starts_with(&directory) || !resolved.is_file() {
+        return Err("The source file is outside this project".into());
+    }
+    Ok(resolved)
+}
+
 pub fn set_root(project: &Path, root: &Path) -> Result<ProjectInfo, String> {
     let directory = fs::canonicalize(project).map_err(|error| error.to_string())?;
     let root = fs::canonicalize(root).map_err(|error| error.to_string())?;
@@ -196,6 +214,30 @@ mod tests {
         let project = load_project(directory.path()).unwrap();
         assert_eq!(project.tex_files.len(), 3);
         assert!(project.root_file.unwrap().ends_with("main.tex"));
+    }
+
+    #[test]
+    fn resolves_diagnostic_files_within_the_project() {
+        let directory = fixture();
+        let path = resolve_file(
+            directory.path(),
+            &directory.path().join("main.tex"),
+            Path::new("chapters/intro.tex"),
+        )
+        .unwrap();
+        assert_eq!(path, directory.path().join("chapters/intro.tex"));
+    }
+
+    #[test]
+    fn refuses_diagnostic_files_outside_the_project() {
+        let directory = fixture();
+        let outside = fixture();
+        assert!(resolve_file(
+            directory.path(),
+            &directory.path().join("main.tex"),
+            &outside.path().join("main.tex")
+        )
+        .is_err());
     }
 
     #[test]

@@ -8,6 +8,7 @@ import CodeEditor from "./components/CodeEditor";
 import { useDocuments } from "./hooks/useDocuments";
 import { useCompiler } from "./hooks/useCompiler";
 import { ProjectInfo, relativePath } from "./lib/project";
+import { Diagnostic, EditorLocation, parseDiagnostics } from "./lib/diagnostics";
 
 import Home from "./components/Home";
 import TitleBar from "./components/TitleBar";
@@ -20,10 +21,12 @@ function App() {
     const [texFiles, setTexFiles] = useState<string[]>([]);
     const [projectError, setProjectError] = useState<string | null>(null);
     const [automaticCompile, setAutomaticCompile] = useState(true);
+    const [editorLocation, setEditorLocation] = useState<EditorLocation | null>(null);
     const compiler = useCompiler(rootFile, automaticCompile);
     const documents = useDocuments(compiler.sourceSaved);
     const filePath = documents.activePath;
     const activeFileContent = documents.activeDocument?.content ?? null;
+    const diagnostics = parseDiagnostics(compiler.log);
     const status: PipelineStatus = documents.error ? 'Error' : documents.saving ? 'Saving...'
         : documents.dirtyCount > 0 && compiler.status === 'Ready' ? 'Unsaved' : compiler.status;
 
@@ -31,6 +34,7 @@ function App() {
         try {
             await documents.flushAll();
             documents.openDocument(path, content);
+            setEditorLocation(null);
         } catch {
             return;
         }
@@ -83,9 +87,28 @@ function App() {
         }
     };
 
+    const handleDiagnostic = async (diagnostic: Diagnostic) => {
+        if (!projectPath || !rootFile) return;
+        try {
+            await documents.flushAll();
+            const path = await invoke<string>("resolve_project_file", {
+                projectPath, rootFile, requestedPath: diagnostic.file,
+            });
+            const content = await invoke<string>("read_file_content", { path });
+            documents.openDocument(path, content);
+            setEditorLocation(previous => ({ line: diagnostic.line, column: diagnostic.column, revision: (previous?.revision ?? 0) + 1 }));
+            setProjectError(null);
+        } catch (failure) {
+            setProjectError(String(failure));
+        }
+    };
+
     return (
         <div className="h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden flex flex-col font-sans">
             <TitleBar />
+            {(projectError || documents.error) && <div role="alert" className="shrink-0 break-words border-b border-red-800 bg-red-950 px-4 py-2 text-sm text-red-200">
+                {projectError || documents.error}
+            </div>}
 
             {!projectPath ? (
                 <Home onProjectSelect={handleProjectSelect} />
@@ -113,10 +136,20 @@ function App() {
                             <Square size={16} />
                         </button>
                     </div>
-                    {compiler.log && <details className="max-h-40 shrink-0 overflow-auto border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs">
-                        <summary className="cursor-pointer">Build output</summary>
-                        <pre className="whitespace-pre-wrap break-words py-2 font-mono text-slate-300">{compiler.log}</pre>
-                    </details>}
+                    {(compiler.log || compiler.error) && <div className="max-h-44 shrink-0 overflow-auto border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs">
+                        {compiler.error && <p role="alert" className="mb-2 text-red-300">{compiler.error.split('\n')[0]}</p>}
+                        {diagnostics.length > 0 && <ul aria-label="Build problems" className="mb-2 space-y-1">
+                            {diagnostics.map((diagnostic, index) => <li key={index}>
+                                <button onClick={() => void handleDiagnostic(diagnostic)} className={`w-full break-words text-left hover:underline ${diagnostic.severity === 'error' ? 'text-red-300' : 'text-amber-200'}`}>
+                                    {diagnostic.file}:{diagnostic.line} {diagnostic.message}
+                                </button>
+                            </li>)}
+                        </ul>}
+                        <details>
+                            <summary className="cursor-pointer">Build output</summary>
+                            <pre className="whitespace-pre-wrap break-words py-2 font-mono text-slate-300">{compiler.log}</pre>
+                        </details>
+                    </div>}
                     <div className="flex-1 relative overflow-hidden">
                         <Group orientation="horizontal" className="absolute inset-0">
                             {/* Left Sidebar */}
@@ -144,6 +177,7 @@ function App() {
                                                 code={activeFileContent}
                                                 onChange={(value) => documents.updateDocument(filePath, value || "")}
                                                 onSave={handleSave}
+                                                location={editorLocation}
                                             />
                                         ) : (
                                             <div className="h-full w-full flex flex-col items-center justify-center gap-8 select-none">
