@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import Sidebar, { itemName } from "./Sidebar";
+import Sidebar, { itemName, visibleProjectNode } from "./Sidebar";
+import { open } from "@tauri-apps/plugin-dialog";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
@@ -51,5 +52,31 @@ describe("safe project file operations", () => {
         const watchId = invoke.mock.calls.find(([command]) => command === "watch_directory")![1].watchId;
         unmount();
         expect(invoke).toHaveBeenCalledWith("unwatch_directory", { watchId });
+    });
+
+    it("keeps PDF figures visible while hiding generated and internal files", () => {
+        const node = (path: string) => ({ name: path.split('/').pop()!, path, is_dir: false });
+        expect(visibleProjectNode(node('/project/main.pdf'), '/project/main.tex')).toBe(false);
+        expect(visibleProjectNode(node('/project/figures/main.pdf'), '/project/main.tex')).toBe(true);
+        expect(visibleProjectNode(node('/project/.tiya.json'), '/project/main.tex')).toBe(false);
+        expect(visibleProjectNode({ ...node('/project/.tiya-build-test'), is_dir: true }, '/project/main.tex')).toBe(false);
+    });
+
+    it("routes image assets to a preview without reading them as text", async () => {
+        invoke.mockImplementation(async command => command === 'open_directory' ? [{ name: 'figure.png', path: '/project/figure.png', is_dir: false }] : undefined);
+        const selected = vi.fn();
+        render(<Sidebar initialPath="/project" onProjectSelect={vi.fn()} onFileSelect={vi.fn()} onAssetSelect={selected} />);
+        fireEvent.doubleClick(await screen.findByText('figure.png'));
+        expect(selected).toHaveBeenCalledWith('/project/figure.png');
+        expect(invoke).not.toHaveBeenCalledWith('read_file_content', { path: '/project/figure.png' });
+    });
+
+    it("imports selected files into the project", async () => {
+        vi.mocked(open).mockResolvedValueOnce(['/downloads/figure.png']);
+        const onMutation = vi.fn(async () => {});
+        render(<Sidebar initialPath="/project" onProjectSelect={vi.fn()} onFileSelect={vi.fn()} onMutation={onMutation} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Import files' }));
+        await waitFor(() => expect(onMutation).toHaveBeenCalledWith('/project/figure.png', '/project/figure.png'));
+        expect(invoke).toHaveBeenCalledWith('import_file', { source: '/downloads/figure.png', destination: '/project/figure.png' });
     });
 });

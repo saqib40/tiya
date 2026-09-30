@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square, X, House } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
+import AssetPreview from "./components/AssetPreview";
 import CodeEditor from "./components/CodeEditor";
 import { useDocuments } from "./hooks/useDocuments";
 import { useCompiler } from "./hooks/useCompiler";
@@ -19,6 +20,9 @@ type PipelineStatus = 'Ready' | 'Unsaved' | 'Saving...' | 'Compiling...' | 'Erro
 function App() {
     const [workspace, setWorkspace] = useState(readWorkspace);
     const projectSelection = useRef(0);
+    const fileSelection = useRef(0);
+    const [assetPath, setAssetPath] = useState<string | null>(null);
+    const [assetRevision, setAssetRevision] = useState(0);
     const [projectPath, setProjectPath] = useState<string | null>(null);
     const [rootFile, setRootFile] = useState<string | null>(null);
     const [texFiles, setTexFiles] = useState<string[]>([]);
@@ -48,9 +52,17 @@ function App() {
     }, []);
 
     const handleFileSelect = async (path: string, content: string) => {
+        const selection = ++fileSelection.current;
         await documents.flushAll().catch(() => undefined);
+        if (selection !== fileSelection.current) return;
+        setAssetPath(null);
         documents.openDocument(path, content);
         setEditorLocation(null);
+    };
+
+    const handleAssetSelect = (path: string) => {
+        fileSelection.current += 1;
+        setAssetPath(path);
     };
 
     const handleProjectSelect = async (path: string) => {
@@ -70,6 +82,8 @@ function App() {
                 } catch { continue; }
             }
             if (selection !== projectSelection.current) return;
+            fileSelection.current += 1;
+            setAssetPath(null);
             documents.reset();
             setProjectError(null);
             setProjectPath(project.path);
@@ -132,6 +146,9 @@ function App() {
 
     const handleMutation = async (source: string, destination: string | null) => {
         if (!projectPath) return;
+        if (assetPath && (assetPath === source || assetPath.startsWith(`${source}/`) || assetPath.startsWith(`${source}\\`))) {
+            setAssetPath(destination ? `${destination}${assetPath.slice(source.length)}` : null);
+        }
         if (destination) documents.relocateDocuments(source, destination);
         else documents.removeDocuments(source);
         const affectsRoot = rootFile && (rootFile === source || rootFile.startsWith(`${source}/`) || rootFile.startsWith(`${source}\\`));
@@ -150,6 +167,7 @@ function App() {
 
     const handleFilesChanged = async (paths: string[]) => {
         if (!projectPath) return;
+        if (assetPath && paths.some(path => assetPath === path || assetPath.startsWith(`${path}/`) || assetPath.startsWith(`${path}\\`))) setAssetRevision(value => value + 1);
         const affected = Object.keys(documents.buffers).filter(file => paths.some(path => file === path || file.startsWith(`${path}/`) || file.startsWith(`${path}\\`)));
         const refreshed = await Promise.all(affected.map(documents.refreshDocument));
         const untracked = paths.some(path => !affected.includes(path));
@@ -164,6 +182,8 @@ function App() {
             await documents.flushAll();
             projectSelection.current += 1;
             compiler.cancelCompile();
+            fileSelection.current += 1;
+            setAssetPath(null);
             setRootFile(null);
             setProjectPath(null);
             documents.reset();
@@ -228,6 +248,7 @@ function App() {
                                     rootFile={rootFile}
                                     onProjectSelect={handleProjectSelect}
                                     onFileSelect={handleFileSelect}
+                                    onAssetSelect={handleAssetSelect}
                                     beforeMutation={documents.flushAll}
                                     onMutation={handleMutation}
                                     onFilesChanged={handleFilesChanged}
@@ -241,13 +262,19 @@ function App() {
                                 <div className="h-full w-full flex flex-col border-r border-white/5 bg-slate-950">
                                     <div role="tablist" aria-label="Open files" className="flex shrink-0 overflow-x-auto border-b border-white/5 bg-slate-900/50">
                                         {Object.values(documents.buffers).map(buffer => <div key={buffer.path} className={`flex shrink-0 items-center border-r border-slate-800 ${buffer.path === filePath ? 'bg-slate-800' : ''}`}>
-                                            <button role="tab" aria-selected={buffer.path === filePath} onClick={() => void handleFileSelect(buffer.path, buffer.content)} title={buffer.path} className="max-w-48 truncate px-3 py-2 text-xs text-slate-200">
+                                            <button role="tab" aria-selected={!assetPath && buffer.path === filePath} onClick={() => void handleFileSelect(buffer.path, buffer.content)} title={buffer.path} className="max-w-48 truncate px-3 py-2 text-xs text-slate-200">
                                                 {relativePath(projectPath, buffer.path)}{buffer.content !== buffer.savedContent ? ' *' : ''}{buffer.externalContent !== undefined ? ' !' : ''}
                                             </button>
                                             <button title={`Close ${relativePath(projectPath, buffer.path)}`} aria-label={`Close ${relativePath(projectPath, buffer.path)}`} onClick={() => void documents.closeDocument(buffer.path).catch(() => undefined)} className="p-2 text-slate-400 hover:text-white"><X size={12} /></button>
                                         </div>)}
+                                        {assetPath && <div className="flex shrink-0 items-center bg-slate-800">
+                                            <button role="tab" aria-selected="true" title={assetPath} className="max-w-48 truncate px-3 py-2 text-xs">{relativePath(projectPath, assetPath)}</button>
+                                            <button title="Close asset preview" aria-label="Close asset preview" onClick={() => setAssetPath(null)} className="p-2"><X size={12} /></button>
+                                        </div>}
                                     </div>
                                     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                                        {assetPath && <AssetPreview path={assetPath} revision={assetRevision} />}
+                                        <div hidden={Boolean(assetPath)} className={assetPath ? 'hidden' : 'flex min-h-0 flex-1 flex-col overflow-hidden'}>
                                         {documents.activeDocument?.recovered && <div role="status" className="flex shrink-0 items-center justify-between gap-3 border-b border-emerald-800 bg-emerald-950 px-3 py-2 text-xs text-emerald-100">
                                             <span>Unsaved edits recovered</span>
                                             <button title="Dismiss recovery notice" aria-label="Dismiss recovery notice" onClick={() => documents.dismissRecovery(filePath)}><X size={14} /></button>
@@ -282,6 +309,7 @@ function App() {
                                                 </div>
                                             </div>
                                         )}
+                                        </div>
                                     </div>
                                 </div>
                             </Panel>

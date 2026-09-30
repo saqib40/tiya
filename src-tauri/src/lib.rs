@@ -69,7 +69,13 @@ fn open_directory(path: String) -> Result<Vec<FileNode>, String> {
 
 #[tauri::command]
 fn read_file_content(path: String) -> Result<String, String> {
-    fs::read_to_string(path).map_err(|e| e.to_string())
+    filesystem::read_text_file(Path::new(&path)).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+async fn import_file(source: String, destination: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || filesystem::import_file(Path::new(&source), Path::new(&destination)))
+        .await.map_err(|error| error.to_string())?.map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -159,6 +165,7 @@ pub fn run() {
             resolve_project_file,
             open_directory,
             read_file_content,
+            import_file,
             compile_preview,
             cancel_compile,
             export_pdf,

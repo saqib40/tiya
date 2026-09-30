@@ -1,6 +1,6 @@
 use serde::Serialize;
 use std::fs::{self, OpenOptions};
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 use std::path::Path;
 
 #[derive(Debug, Serialize)]
@@ -28,6 +28,61 @@ pub fn save_checked(path: &Path, content: &str, expected: &str) -> Result<(), Sa
 
 pub fn create_file(path: &Path) -> io::Result<()> {
     OpenOptions::new().write(true).create_new(true).open(path)?;
+    Ok(())
+}
+
+pub fn read_text_file(path: &Path) -> io::Result<String> {
+    const LIMIT: u64 = 8 * 1024 * 1024;
+    let file = fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.len() > LIMIT {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Only text files up to 8 MB can be edited",
+        ));
+    }
+    let mut bytes = Vec::new();
+    file.take(LIMIT + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > LIMIT || bytes.contains(&0) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "This file is binary or too large to edit",
+        ));
+    }
+    String::from_utf8(bytes).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "Only UTF-8 text files can be edited",
+        )
+    })
+}
+
+pub fn import_file(source: &Path, destination: &Path) -> io::Result<()> {
+    const LIMIT: u64 = 64 * 1024 * 1024;
+    let file = fs::File::open(source)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() || metadata.len() > LIMIT {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Only files up to 64 MB can be imported",
+        ));
+    }
+    let parent = destination
+        .parent()
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "Invalid destination"))?;
+    let mut temporary = tempfile::Builder::new()
+        .prefix(".tiya-import-")
+        .tempfile_in(parent)?;
+    if io::copy(&mut file.take(LIMIT + 1), &mut temporary)? > LIMIT {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "The imported file exceeds 64 MB",
+        ));
+    }
+    temporary.as_file().sync_all()?;
+    temporary
+        .persist_noclobber(destination)
+        .map_err(|failure| failure.error)?;
     Ok(())
 }
 
@@ -109,6 +164,36 @@ pub fn save_file(path: &Path, content: &str) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn imports_binary_files_without_replacing_existing_assets() {
+        let directory = tempfile::tempdir().unwrap();
+        let source = directory.path().join("original.png");
+        let destination = directory.path().join("figure.png");
+        fs::write(&source, [0x89, 0x50, 0x4e, 0x47, 0]).unwrap();
+        import_file(&source, &destination).unwrap();
+        fs::write(&source, "different file").unwrap();
+        assert_eq!(
+            import_file(&source, &destination).unwrap_err().kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert_eq!(fs::read(&destination).unwrap(), [0x89, 0x50, 0x4e, 0x47, 0]);
+    }
+
+    #[test]
+    fn rejects_binary_and_oversized_editor_reads() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("data.bin");
+        fs::write(&path, b"binary\0data").unwrap();
+        assert!(read_text_file(&path).is_err());
+        fs::File::create(&path)
+            .unwrap()
+            .set_len(8 * 1024 * 1024 + 1)
+            .unwrap();
+        assert!(read_text_file(&path).is_err());
+        fs::write(&path, "ordinary text").unwrap();
+        assert_eq!(read_text_file(&path).unwrap(), "ordinary text");
+    }
 
     #[test]
     fn refuses_to_overwrite_external_changes() {

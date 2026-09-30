@@ -5,7 +5,7 @@ import { parseDiagnostics } from "./lib/diagnostics";
 import { readWorkspace, rememberProject, saveWorkspace } from "./lib/workspace";
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
-vi.mock("@tauri-apps/api/core", () => ({ invoke }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke, convertFileSrc: (path: string) => path }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: vi.fn(async () => vi.fn()) }));
 vi.mock("@tauri-apps/api/window", () => ({
     getCurrentWindow: () => ({ onCloseRequested: vi.fn(async () => vi.fn()), close: vi.fn() }),
@@ -21,10 +21,11 @@ vi.mock("./components/Home", () => ({
         <button onClick={() => onProjectSelect("/project")}>Open project</button>,
 }));
 vi.mock("./components/Sidebar", () => ({
-    default: ({ onFileSelect }: { onFileSelect: (path: string, content: string) => void }) => <>
+    default: ({ onFileSelect, onAssetSelect }: { onFileSelect: (path: string, content: string) => void; onAssetSelect: (path: string) => void }) => <>
         <button onClick={() => onFileSelect("/project/main.tex", "Root document")}>Open root</button>
         <button onClick={() => onFileSelect("/project/chapter.tex", "Chapter")}>Open chapter</button>
         <button onClick={() => onFileSelect("/project/references.bib", "Bibliography")}>Open bibliography</button>
+        <button onClick={() => onAssetSelect("/project/figure.png")}>Open image</button>
     </>,
 }));
 vi.mock("./components/CodeEditor", () => ({
@@ -144,5 +145,17 @@ describe("project compilation", () => {
         await screen.findByRole("button", { name: "Open project" });
         await waitFor(() => expect(readWorkspace().lastProject).toBeNull());
         expect(readWorkspace().recentProjects).toEqual(["/project"]);
+    });
+
+    it("previews assets without discarding or replacing source buffers", async () => {
+        render(<App />);
+        fireEvent.click(screen.getByRole('button', { name: 'Open project' }));
+        await screen.findByRole('textbox', { name: 'Source' });
+        fireEvent.change(screen.getByRole('textbox', { name: 'Source' }), { target: { value: 'Unsaved draft' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Open image' }));
+        expect(screen.getByRole('img', { name: 'figure.png' })).toBeInTheDocument();
+        expect(screen.queryByRole('textbox', { name: 'Source' })).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Close asset preview' }));
+        expect(screen.getByRole('textbox', { name: 'Source' })).toHaveValue('Unsaved draft');
     });
 });

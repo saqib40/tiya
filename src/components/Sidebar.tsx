@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, memo } from "react";
-import { Folder, Plus, FileText, FilePlus, FolderPlus, Trash2, ChevronRight, ChevronDown, Loader2, Pencil, X, Check } from "lucide-react";
+import { Folder, Plus, FileText, FilePlus, FolderPlus, Trash2, ChevronRight, ChevronDown, Loader2, Pencil, X, Check, Upload } from "lucide-react";
 import { open, confirm } from "@tauri-apps/plugin-dialog";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -17,6 +17,7 @@ interface SidebarProps {
     rootFile?: string | null;
     onProjectSelect: (path: string) => void;
     onFileSelect: (path: string, content: string) => void;
+    onAssetSelect?: (path: string) => void;
     beforeMutation?: () => Promise<void>;
     onMutation?: (source: string, destination: string | null) => Promise<void>;
     onFilesChanged?: (paths: string[]) => Promise<void>;
@@ -35,8 +36,17 @@ interface NewItemState {
     parentPath: string;
 }
 
+export function visibleProjectNode(node: FileNode, rootFile?: string | null) {
+    if (node.name.startsWith('.tiya') || ['.git', 'node_modules', 'target'].includes(node.name)) return false;
+    if (node.is_dir || !rootFile) return true;
+    const stem = rootFile.replace(/\.tex$/i, '').replace(/\\/g, '/');
+    const path = node.path.replace(/\\/g, '/');
+    return !['pdf', 'log', 'aux', 'out', 'toc', 'synctex.gz', 'fls', 'fdb_latexmk'].some(extension => path === `${stem}.${extension}`);
+}
+
 const FileTreeItem = memo(({
     node,
+    rootFile,
     depth = 0,
     selectedPath,
     onSelect,
@@ -53,6 +63,7 @@ const FileTreeItem = memo(({
     refreshKey
 }: {
     node: FileNode;
+    rootFile?: string | null;
     depth?: number;
     selectedPath: string | null;
     onSelect: (path: string, isDir: boolean) => void;
@@ -83,12 +94,7 @@ const FileTreeItem = memo(({
         setLoading(true);
         try {
             const result: FileNode[] = await invoke("open_directory", { path: node.path });
-            const hideExts = ['aux', 'out', 'toc', 'synctex.gz', 'fls', 'fdb_latexmk', 'pdf'];
-            const filtered = result.filter(f => {
-                if (f.is_dir) return true;
-                const name = f.name.toLowerCase();
-                return !hideExts.some(ext => name.endsWith('.' + ext));
-            });
+            const filtered = result.filter(file => visibleProjectNode(file, rootFile));
             setChildren(filtered.sort((a, b) => {
                 if (a.is_dir === b.is_dir) return a.name.localeCompare(b.name);
                 return a.is_dir ? -1 : 1;
@@ -98,7 +104,7 @@ const FileTreeItem = memo(({
         } finally {
             setLoading(false);
         }
-    }, [node.path]);
+    }, [node.path, rootFile]);
 
     useEffect(() => {
         if (isExpanded) {
@@ -255,6 +261,7 @@ const FileTreeItem = memo(({
                             <FileTreeItem
                                 key={child.path}
                                 node={child}
+                                rootFile={rootFile}
                                 depth={depth + 1}
                                 selectedPath={selectedPath}
                                 onSelect={onSelect}
@@ -280,7 +287,7 @@ const FileTreeItem = memo(({
 
 FileTreeItem.displayName = "FileTreeItem";
 
-const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeMutation, onMutation, onFilesChanged }: SidebarProps) => {
+const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, onAssetSelect, beforeMutation, onMutation, onFilesChanged }: SidebarProps) => {
     const [rootFiles, setRootFiles] = useState<FileNode[]>([]);
     const [selectedPath, setSelectedPath] = useState<string | null>(null);
     const [selectedIsDir, setSelectedIsDir] = useState(false);
@@ -292,6 +299,7 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeM
     const [refreshKey, setRefreshKey] = useState(0);
     const [error, setError] = useState<string | null>(null);
     const [rename, setRename] = useState<{ path: string; name: string } | null>(null);
+    const [importing, setImporting] = useState(false);
     const onFilesChangedRef = useRef(onFilesChanged);
     const openRevision = useRef(0);
     useEffect(() => { onFilesChangedRef.current = onFilesChanged; }, [onFilesChanged]);
@@ -311,12 +319,7 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeM
         setLoading(true);
         try {
             const result: FileNode[] = await invoke("open_directory", { path });
-            const hideExts = ['aux', 'out', 'toc', 'synctex.gz', 'fls', 'fdb_latexmk', 'pdf'];
-            const filtered = result.filter(f => {
-                if (f.is_dir) return true;
-                const name = f.name.toLowerCase();
-                return !hideExts.some(ext => name.endsWith('.' + ext));
-            });
+            const filtered = result.filter(file => visibleProjectNode(file, rootFile));
             setRootFiles(filtered.sort((a, b) => {
                 if (a.is_dir === b.is_dir) return a.name.localeCompare(b.name);
                 return a.is_dir ? -1 : 1;
@@ -327,7 +330,7 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeM
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [rootFile]);
 
     useEffect(() => {
         if (initialPath) {
@@ -397,13 +400,36 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeM
     const handleFileOpen = useCallback(async (path: string) => {
         const revision = ++openRevision.current;
         try {
+            setError(null);
+            if (/\.(pdf|png|jpe?g|gif|webp|bmp|svg)$/i.test(path) && onAssetSelect) {
+                onAssetSelect(path);
+                return;
+            }
             const content: string = await invoke("read_file_content", { path });
             if (revision === openRevision.current) onFileSelect(path, content);
         } catch (error) {
             console.error("Failed to read file:", error);
             setError(String(error));
         }
-    }, [onFileSelect]);
+    }, [onFileSelect, onAssetSelect]);
+
+    const handleImport = async () => {
+        if (!initialPath) return;
+        const parent = selectedIsDir && selectedPath ? selectedPath : initialPath;
+        setImporting(true);
+        setError(null);
+        try {
+            const selected = await open({ title: 'Import files', multiple: true, directory: false });
+            for (const source of typeof selected === 'string' ? [selected] : selected || []) {
+                const name = itemName(source.split(/[/\\]/).pop() || '');
+                const destination = `${parent}/${name}`;
+                try { await invoke('import_file', { source, destination }); }
+                catch (failure) { throw new Error(`${name}: ${String(failure)}`); }
+                await onMutation?.(destination, destination);
+            }
+        } catch (failure) { setError(String(failure)); }
+        finally { setImporting(false); setRefreshKey(value => value + 1); }
+    };
 
     const handleNewItemInit = useCallback((type: 'file' | 'folder') => {
         if (!initialPath) return;
@@ -564,6 +590,7 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeM
             <div className="px-4 py-2 flex items-center justify-between border-b border-slate-900 mb-2">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Explorer</span>
                 <div className="flex items-center gap-1">
+                    <button onClick={() => void handleImport()} disabled={importing} title="Import files" aria-label="Import files" className="p-1.5 text-slate-400 hover:text-white disabled:opacity-40"><Upload size={14} /></button>
                     <button
                         onClick={() => handleNewItemInit('file')}
                         className="p-1.5 hover:bg-slate-800 text-slate-400 hover:text-blue-400 transition-colors rounded-sm"
@@ -673,6 +700,7 @@ const Sidebar = ({ initialPath, rootFile, onProjectSelect, onFileSelect, beforeM
                         <FileTreeItem
                             key={file.path}
                             node={file}
+                            rootFile={rootFile}
                             selectedPath={selectedPath}
                             onSelect={handleSelect}
                             onOpen={handleFileOpen}
