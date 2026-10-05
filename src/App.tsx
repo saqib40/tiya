@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Panel, Group, Separator, GroupImperativeHandle } from "react-resizable-panels";
 import { invoke } from "@tauri-apps/api/core";
-import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Square, X, House, Settings, PanelLeft, Code2, Columns2, BookOpen } from "lucide-react";
+import { Loader2, CheckCircle2, AlertCircle, FileText, Play, Search, Square, X, House, Settings, PanelLeft, Code2, Columns2, BookOpen } from "lucide-react";
 import Sidebar from "./components/Sidebar";
 import PDFPreview from "./components/PDFPreview";
 import AssetPreview from "./components/AssetPreview";
 import CodeEditor from "./components/CodeEditor";
+import ProjectSearch, { ProjectSearchMatch } from "./components/ProjectSearch";
 import { useDocuments } from "./hooks/useDocuments";
 import { useCompiler } from "./hooks/useCompiler";
 import { useSynctex } from "./hooks/useSynctex";
@@ -25,6 +26,7 @@ function App() {
     const group = useRef<GroupImperativeHandle>(null);
     const [narrow, setNarrow] = useState(() => window.matchMedia?.('(max-width: 899px)').matches ?? false);
     const [preferencesOpen, setPreferencesOpen] = useState(false);
+    const [searchOpen, setSearchOpen] = useState(false);
     const preferencesDialog = useRef<HTMLDialogElement>(null);
     const view = narrow && appearance.view === 'split' ? 'editor' : appearance.view;
     const showFiles = view === 'files' || (view === 'split' && appearance.sidebar);
@@ -106,6 +108,18 @@ function App() {
     const handleAssetSelect = (path: string) => {
         fileSelection.current += 1;
         setAssetPath(path);
+    };
+
+    const handleSearchMatch = async (match: ProjectSearchMatch) => {
+        try {
+            const content = await invoke<string>("read_file_content", { path: match.path });
+            await handleFileSelect(match.path, content);
+            setEditorLocation(previous => ({ line: match.line, column: match.column, revision: (previous?.revision ?? 0) + 1 }));
+            setSearchOpen(false);
+            setProjectError(null);
+        } catch (failure) {
+            setProjectError(String(failure));
+        }
     };
 
     const handleProjectSelect = async (path: string) => {
@@ -289,6 +303,7 @@ function App() {
                             <button title="Split view" aria-label="Split view" aria-pressed={view === 'split'} disabled={narrow} onClick={() => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, view: 'split' } }))} className={`p-1.5 disabled:opacity-30 ${view === 'split' ? 'bg-slate-800 text-emerald-400' : 'text-slate-400'}`}><Columns2 size={16} /></button>
                             <button title="PDF view" aria-label="PDF view" aria-pressed={view === 'preview'} onClick={() => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, view: 'preview' } }))} className={`p-1.5 ${view === 'preview' ? 'bg-slate-800 text-emerald-400' : 'text-slate-400'}`}><BookOpen size={16} /></button>
                         </div>
+                        <button title="Search project" aria-label="Search project" onClick={() => setSearchOpen(true)} className="shrink-0 p-1.5 text-slate-300"><Search size={16} /></button>
                         <button title="Preferences" aria-label="Preferences" onClick={() => setPreferencesOpen(true)} className="shrink-0 p-1.5 text-slate-300"><Settings size={16} /></button>
                     </div>
                     {compiler.preparingPackages && compiler.status === 'Compiling...' && <div role="status" className="flex shrink-0 items-center gap-3 border-b border-blue-800 bg-blue-950 px-4 py-2 text-xs text-blue-100">
@@ -444,6 +459,7 @@ function App() {
                     <button onClick={() => setPreferencesOpen(false)} className="mt-2 self-end rounded border border-slate-600 px-3 py-2">Done</button>
                 </div>
             </dialog>}
+            {searchOpen && projectPath && <ProjectSearch projectPath={projectPath} onSelect={match => void handleSearchMatch(match)} onClose={() => setSearchOpen(false)} />}
         </div>
     );
 }

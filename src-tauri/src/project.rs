@@ -10,6 +10,14 @@ pub struct ProjectInfo {
     pub tex_files: Vec<String>,
 }
 
+#[derive(Debug, PartialEq, Serialize)]
+pub struct SearchMatch {
+    pub path: String,
+    pub line: usize,
+    pub column: usize,
+    pub preview: String,
+}
+
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 struct ProjectSettings {
@@ -254,6 +262,75 @@ fn collect_sources(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), Str
     Ok(())
 }
 
+fn collect_searchable_files(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), String> {
+    for entry in fs::read_dir(directory).map_err(|error| error.to_string())? {
+        let entry = entry.map_err(|error| error.to_string())?;
+        let file_type = entry.file_type().map_err(|error| error.to_string())?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with('.') || matches!(name.as_ref(), "node_modules" | "target" | "build") {
+            continue;
+        }
+        if file_type.is_dir() {
+            collect_searchable_files(&entry.path(), files)?;
+        } else if file_type.is_file()
+            && entry.path().extension().is_some_and(|extension| {
+                ["tex", "bib", "sty", "cls"]
+                    .iter()
+                    .any(|allowed| extension.eq_ignore_ascii_case(allowed))
+            })
+        {
+            files.push(entry.path());
+        }
+    }
+    Ok(())
+}
+
+pub fn search(project: &Path, query: &str) -> Result<Vec<SearchMatch>, String> {
+    const MAX_FILE_SIZE: u64 = 2 * 1024 * 1024;
+    const MAX_RESULTS: usize = 500;
+    let query = query.trim();
+    if query.len() < 2 || query.len() > 200 {
+        return Err("Enter between 2 and 200 characters".into());
+    }
+    let directory = fs::canonicalize(project).map_err(|error| error.to_string())?;
+    if !directory.is_dir() {
+        return Err("Select a project folder".into());
+    }
+    let mut files = Vec::new();
+    collect_searchable_files(&directory, &mut files)?;
+    files.sort();
+    let query = query.to_ascii_lowercase();
+    let mut matches = Vec::new();
+    for path in files {
+        if fs::metadata(&path)
+            .map_err(|error| error.to_string())?
+            .len()
+            > MAX_FILE_SIZE
+        {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        for (line_index, line) in content.lines().enumerate() {
+            let Some(column) = line.to_ascii_lowercase().find(&query) else {
+                continue;
+            };
+            matches.push(SearchMatch {
+                path: path.to_string_lossy().into_owned(),
+                line: line_index + 1,
+                column: line[..column].encode_utf16().count() + 1,
+                preview: line.trim().chars().take(240).collect(),
+            });
+            if matches.len() == MAX_RESULTS {
+                return Ok(matches);
+            }
+        }
+    }
+    Ok(matches)
+}
+
 pub fn load_project(path: &Path) -> Result<ProjectInfo, String> {
     let directory = fs::canonicalize(path).map_err(|error| error.to_string())?;
     if !directory.is_dir() {
@@ -448,6 +525,27 @@ mod tests {
             directory.path().join("main.tex").to_string_lossy()
         );
         assert_eq!(project.tex_files.len(), 2);
+    }
+
+    #[test]
+    fn searches_project_sources_without_entering_build_directories() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(directory.path().join("main.tex"), "First line\nNeedle here").unwrap();
+        fs::write(
+            directory.path().join("references.bib"),
+            "title = {needle work}",
+        )
+        .unwrap();
+        fs::create_dir(directory.path().join("build")).unwrap();
+        fs::write(directory.path().join("build/hidden.tex"), "needle").unwrap();
+
+        let results = search(directory.path(), "NEEDLE").unwrap();
+
+        assert_eq!(results.len(), 2);
+        assert_eq!(results[0].line, 2);
+        assert_eq!(results[0].column, 1);
+        assert!(results[1].path.ends_with("references.bib"));
+        assert!(search(directory.path(), "x").is_err());
     }
 
     #[test]

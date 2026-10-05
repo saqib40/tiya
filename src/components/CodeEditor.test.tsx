@@ -101,4 +101,12 @@ describe("editor save shortcut", () => {
         fireEvent.click(screen.getByRole('button', { name: 'Show in PDF' }));
         expect(onForwardSync).toHaveBeenCalledWith(7);
     });
+
+    it('navigates to headings from the document outline', () => {
+        render(<CodeEditor code={'\\section{Introduction}\nText\n\\subsection{Details}'} onChange={vi.fn()} />);
+        fireEvent.click(screen.getByRole('button', { name: 'Document outline' }));
+        fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
+        expect(editor.setPosition).toHaveBeenLastCalledWith({ lineNumber: 3, column: 1 });
+        expect(editor.focus).toHaveBeenCalled();
+    });
 });

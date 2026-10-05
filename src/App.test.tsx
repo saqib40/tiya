@@ -46,6 +46,7 @@ describe("project compilation", () => {
                 return { path: "/project", root_file: "/project/main.tex", tex_files: ["/project/main.tex", "/project/chapter.tex"] };
             }
             if (command === "read_file_content") return "Root document";
+            if (command === "search_project") return [{ path: "/project/chapter.tex", line: 4, column: 2, preview: "Search result" }];
             if (command === "resolve_project_file") return payload?.requestedPath;
             if (command === "compile_preview") return { pdf_path: "/project/main.pdf", log: "Success" };
             if (command === "cancel_compile") return;
@@ -100,6 +101,18 @@ describe("project compilation", () => {
             projectPath: "/project", rootFile: "/project/main.tex", requestedPath: "chapter.tex",
         }));
         expect(invoke).toHaveBeenCalledWith("read_file_content", { path: "/project/chapter.tex" });
+    });
+
+    it("opens a project search result in the editor", async () => {
+        render(<App />);
+        fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+        await screen.findByDisplayValue("Root document");
+        fireEvent.click(screen.getByRole("button", { name: "Search project" }));
+        fireEvent.change(screen.getByRole("searchbox", { name: "Search project" }), { target: { value: "result" } });
+        fireEvent.submit(screen.getByRole("search"));
+        fireEvent.click(await screen.findByRole("button", { name: /chapter\.tex:4 Search result/ }));
+        await waitFor(() => expect(invoke).toHaveBeenCalledWith("read_file_content", { path: "/project/chapter.tex" }));
+        expect(screen.queryByRole("dialog", { name: "Search project" })).not.toBeInTheDocument();
     });
 
     it("offers an explicit retry when first-run package preparation fails", async () => {

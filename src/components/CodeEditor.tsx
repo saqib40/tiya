@@ -1,8 +1,9 @@
 import { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
-import { Loader2, Crosshair, Save } from 'lucide-react';
+import { Loader2, Crosshair, ListTree, Save } from 'lucide-react';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { EditorLocation } from '../lib/diagnostics';
+import { latexOutline } from '../lib/latex';
 
 interface CodeEditorProps {
     code: string;
@@ -24,7 +25,9 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
     const onSaveRef = useRef(onSave);
     const [isPasting, setIsPasting] = useState(false);
     const [pasteError, setPasteError] = useState<string | null>(null);
+    const [outlineOpen, setOutlineOpen] = useState(false);
     const locationRef = useRef(location);
+    const outline = latexOutline(code);
 
     const revealLocation = (target: EditorLocation | null | undefined) => {
         if (!target || !editorRef.current) return;
@@ -165,9 +168,15 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
 
     return (
         <div className="h-full min-h-0 w-full flex-1 relative flex flex-col overflow-hidden bg-slate-950">
-            <div className="flex shrink-0 items-center justify-end gap-2 border-b border-slate-800 px-3 py-1 text-slate-400">
+            <div className="relative flex shrink-0 items-center justify-end gap-2 border-b border-slate-800 px-3 py-1 text-slate-400">
+                <button title="Document outline" aria-label="Document outline" aria-expanded={outlineOpen} disabled={outline.length === 0} onClick={() => setOutlineOpen(value => !value)} className="p-1 disabled:opacity-30"><ListTree size={15} /></button>
                 <button title="Save source" aria-label="Save source" disabled={!onSave} onClick={onSave} className="p-1 disabled:opacity-30"><Save size={15} /></button>
                 <button title="Show in PDF" aria-label="Show in PDF" disabled={!onForwardSync} onClick={() => { const position = editorRef.current?.getPosition(); if (position) onForwardSync?.(position.lineNumber); }} className="p-1 disabled:opacity-30"><Crosshair size={15} /></button>
+                {outlineOpen && <div role="menu" aria-label="Document outline" className="absolute right-3 top-8 z-40 max-h-80 w-72 overflow-auto rounded border border-slate-700 bg-slate-900 py-1 text-xs shadow-xl">
+                    {outline.map(item => <button key={`${item.line}-${item.title}`} role="menuitem" onClick={() => { revealLocation({ line: item.line, column: 1, revision: item.line }); setOutlineOpen(false); }} className="block w-full truncate px-3 py-1.5 text-left text-slate-200 hover:bg-slate-800" style={{ paddingLeft: `${12 + (item.level - 1) * 12}px` }} title={item.title}>
+                        {item.title}
+                    </button>)}
+                </div>}
             </div>
             {pasteError && <div role="alert" className="absolute bottom-0 left-0 right-0 z-50 break-words bg-red-950 px-3 py-2 text-xs text-red-200">{pasteError}</div>}
             {/* Pasting Overlay */}
