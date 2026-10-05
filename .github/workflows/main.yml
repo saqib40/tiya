@@ -9,6 +9,7 @@ permissions:
 
 env:
   TECTONIC_VERSION: "0.15.0"
+  TECTONIC_LINUX_SHA256: "875fbbc9ab48560d7776088c608e0beee49197b57ab4a2f6c5385b2c661c842f"
 
 jobs:
   verify:
@@ -34,6 +35,15 @@ jobs:
 
       - name: Install native dependencies
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Install verified Tectonic sidecar
+        run: |
+          curl --fail --location --show-error --output tectonic.tar.gz "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${TECTONIC_VERSION}/tectonic-${TECTONIC_VERSION}-x86_64-unknown-linux-gnu.tar.gz"
+          echo "${TECTONIC_LINUX_SHA256}  tectonic.tar.gz" | sha256sum --check --strict
+          tar -xzf tectonic.tar.gz
+          mkdir -p src-tauri/binaries
+          mv tectonic src-tauri/binaries/tectonic-x86_64-unknown-linux-gnu
+          chmod +x src-tauri/binaries/tectonic-x86_64-unknown-linux-gnu
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
