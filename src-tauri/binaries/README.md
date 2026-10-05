@@ -1,4 +1,4 @@
-# This directory holds Tectonic sidecar binaries
+# This directory holds bundled Tectonic binaries
 # Binaries are downloaded by CI and should NOT be committed to git
 
 # Naming convention (Tauri auto-detects platform):
