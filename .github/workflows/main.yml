@@ -5,13 +5,46 @@ on:
       - 'v[0-9]+.[0-9]+.[0-9]+'
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   TECTONIC_VERSION: "0.15.0"
 
 jobs:
+  verify:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Verify release version
+        run: test "$GITHUB_REF_NAME" = "v$(node -p "require('./package.json').version")"
+
+      - name: Test and build frontend
+        run: npm test && npm run build
+
+      - name: Install native dependencies
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl file libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Test native code
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
   release:
+    needs: verify
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -19,12 +52,15 @@ jobs:
           - platform: macos-latest
             target: aarch64-apple-darwin
             tectonic_asset: tectonic-0.15.0-aarch64-apple-darwin.tar.gz
+            tectonic_sha256: 24bd46566fa30d41101848405e9cbc4645edb92d8f857c9d21262174fb70cd33
           - platform: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             tectonic_asset: tectonic-0.15.0-x86_64-unknown-linux-gnu.tar.gz
+            tectonic_sha256: 875fbbc9ab48560d7776088c608e0beee49197b57ab4a2f6c5385b2c661c842f
           - platform: windows-latest
             target: x86_64-pc-windows-msvc
             tectonic_asset: tectonic-0.15.0-x86_64-pc-windows-msvc.zip
+            tectonic_sha256: 1d6bb76f049c8a3774f6e9d66e4b04e1a8c3dcb37527b6b41b7e894328e7bf29
     
     runs-on: ${{ matrix.platform }}
 
@@ -44,7 +80,8 @@ jobs:
         if: matrix.platform != 'windows-latest'
         run: |
           mkdir -p src-tauri/binaries
-          curl -L -o tectonic.tar.gz "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${{ env.TECTONIC_VERSION }}/${{ matrix.tectonic_asset }}"
+          curl --fail --location --show-error -o tectonic.tar.gz "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${{ env.TECTONIC_VERSION }}/${{ matrix.tectonic_asset }}"
+          echo "${{ matrix.tectonic_sha256 }}  tectonic.tar.gz" | sha256sum --check --strict
           tar -xzf tectonic.tar.gz
           mv tectonic src-tauri/binaries/tectonic-${{ matrix.target }}
           chmod +x src-tauri/binaries/tectonic-${{ matrix.target }}
@@ -56,6 +93,8 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path src-tauri/binaries
           Invoke-WebRequest -Uri "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${{ env.TECTONIC_VERSION }}/${{ matrix.tectonic_asset }}" -OutFile tectonic.zip
+          $actual = (Get-FileHash tectonic.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne "${{ matrix.tectonic_sha256 }}") { throw "Tectonic checksum mismatch: $actual" }
           Expand-Archive -Path tectonic.zip -DestinationPath .
           Move-Item -Path tectonic.exe -Destination src-tauri/binaries/tectonic-${{ matrix.target }}.exe
           Remove-Item tectonic.zip
@@ -68,7 +107,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 'lts/*'
+          node-version: '22'
           cache: 'npm'
 
       - name: Install Frontend Dependencies
