@@ -49,6 +49,7 @@ function App() {
     const diagnostics = parseDiagnostics(compiler.log);
     const status: PipelineStatus = documents.error ? 'Error' : documents.saving ? 'Saving...'
         : documents.dirtyCount > 0 && compiler.status === 'Ready' ? 'Unsaved' : compiler.status;
+    const packageDownloadError = compiler.error?.startsWith('Tectonic could not download the required LaTeX packages.');
 
     useEffect(() => { setPdfLocation(null); }, [compiler.pdfPath, compiler.pdfRevision]);
 
@@ -290,8 +291,18 @@ function App() {
                         </div>
                         <button title="Preferences" aria-label="Preferences" onClick={() => setPreferencesOpen(true)} className="shrink-0 p-1.5 text-slate-300"><Settings size={16} /></button>
                     </div>
+                    {compiler.preparingPackages && compiler.status === 'Compiling...' && <div role="status" className="flex shrink-0 items-center gap-3 border-b border-blue-800 bg-blue-950 px-4 py-2 text-xs text-blue-100">
+                        <Loader2 size={14} className="shrink-0 animate-spin" />
+                        <div className="min-w-0">
+                            <p className="font-semibold">Preparing LaTeX packages</p>
+                            <p className="truncate text-blue-200">{compiler.activity} · The first build may take a few minutes.</p>
+                        </div>
+                    </div>}
                     {(compiler.log || compiler.error) && <div className="max-h-44 shrink-0 overflow-auto border-b border-slate-800 bg-slate-900 px-4 py-2 text-xs">
-                        {compiler.error && <p role="alert" className="mb-2 text-red-300">{compiler.error.split('\n')[0]}</p>}
+                        {compiler.error && <div role="alert" className="mb-2 flex items-center justify-between gap-3 text-red-300">
+                            <p>{compiler.error.split('\n')[0]}</p>
+                            {packageDownloadError && <button type="button" onClick={compiler.requestCompile} className="shrink-0 rounded border border-red-700 px-2 py-1 font-semibold text-red-100 hover:bg-red-950">Retry build</button>}
+                        </div>}
                         {diagnostics.length > 0 && <ul aria-label="Build problems" className="mb-2 space-y-1">
                             {diagnostics.map((diagnostic, index) => <li key={index}>
                                 <button onClick={() => void handleDiagnostic(diagnostic)} className={`w-full break-words text-left hover:underline ${diagnostic.severity === 'error' ? 'text-red-300' : 'text-amber-200'}`}>
@@ -417,8 +428,8 @@ function App() {
                             </span>
                         </div>
                         {filePath && (
-                            <div className="ml-auto text-[10px] text-white/40 font-mono">
-                                {status === 'Ready' && "Changes synced to disk"}
+                            <div className="ml-auto max-w-[60%] truncate text-[10px] text-white/50 font-mono">
+                                {status === 'Ready' ? "Changes synced to disk" : status === 'Compiling...' ? compiler.activity : null}
                             </div>
                         )}
                     </footer>

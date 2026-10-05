@@ -2,6 +2,7 @@ use serde::Serialize;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
@@ -47,6 +48,24 @@ fn append_log(log: &mut String, message: &str) {
             boundary += 1;
         }
         log.drain(..boundary);
+    }
+}
+
+fn output_kind(message: &str) -> &'static str {
+    let message = message.to_ascii_lowercase();
+    if [
+        "connecting to",
+        "resolved to",
+        "downloading",
+        "fetching",
+        "retrieving",
+    ]
+    .iter()
+    .any(|marker| message.contains(marker))
+    {
+        "package"
+    } else {
+        "output"
     }
 }
 
@@ -190,12 +209,17 @@ pub async fn compile(
             message: "Starting Tectonic",
         },
     );
+    let preparing_packages = AtomicBool::new(false);
     let result = run_command(command, receiver, Duration::from_secs(300), |message| {
+        let kind = output_kind(message);
+        if kind == "package" {
+            preparing_packages.store(true, Ordering::Relaxed);
+        }
         let _ = app.emit(
             "compile-output",
             CompileEvent {
                 request_id,
-                kind: "output",
+                kind,
                 message,
             },
         );
@@ -210,7 +234,13 @@ pub async fn compile(
     if log_path.exists() {
         let _ = publish_output(&log_path, &parent.join(format!("{stem}.log")), false);
     }
-    let log = result?;
+    let log = result.map_err(|error| {
+        if preparing_packages.load(Ordering::Relaxed) {
+            format!("Tectonic could not download the required LaTeX packages. Check your internet connection and try the build again.\n{error}")
+        } else {
+            error
+        }
+    })?;
     let pdf_path = parent.join(format!("{stem}.pdf"));
     let synctex_name = format!("{stem}.synctex.gz");
     let synctex_path = output_dir.path().join(&synctex_name);
@@ -231,6 +261,16 @@ pub async fn compile(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identifies_package_download_output() {
+        assert_eq!(
+            output_kind("note: connecting to https://example.test/bundle"),
+            "package"
+        );
+        assert_eq!(output_kind("note: downloading index"), "package");
+        assert_eq!(output_kind("Running TeX ..."), "output");
+    }
 
     fn test_command(argument: &str) -> Command {
         let app = tauri::test::mock_builder()

@@ -102,6 +102,23 @@ describe("project compilation", () => {
         expect(invoke).toHaveBeenCalledWith("read_file_content", { path: "/project/chapter.tex" });
     });
 
+    it("offers an explicit retry when first-run package preparation fails", async () => {
+        const normalInvoke = invoke.getMockImplementation()!;
+        let firstBuild = true;
+        invoke.mockImplementation(async (command, payload) => {
+            if (command === "compile_preview" && firstBuild) {
+                firstBuild = false;
+                throw "Tectonic could not download the required LaTeX packages. Check your internet connection and try the build again.\nConnection failed";
+            }
+            return normalInvoke(command, payload);
+        });
+        render(<App />);
+        fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+        fireEvent.click(await screen.findByRole("button", { name: "Retry build" }));
+        await screen.findByText("PDF: /project/main.pdf");
+        expect(invoke.mock.calls.filter(([command]) => command === "compile_preview")).toHaveLength(2);
+    });
+
     it("recognizes Windows paths, columns, warnings, and duplicate diagnostics", () => {
         const message = "error: C:\\My Papers\\paper.tex:12:3: Undefined control sequence";
         expect(parseDiagnostics(`${message}\n${message}\nwarning: chapter.tex:4: Missing reference`)).toEqual([

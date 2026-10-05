@@ -2,7 +2,12 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { useCompiler } from "./useCompiler";
 
-const { invoke, builds, listen } = vi.hoisted(() => ({ invoke: vi.fn(), builds: vi.fn(), listen: vi.fn(async () => vi.fn()) }));
+const { invoke, builds, listen, compileListeners } = vi.hoisted(() => ({
+    invoke: vi.fn(),
+    builds: vi.fn(),
+    listen: vi.fn(),
+    compileListeners: [] as Array<(event: { payload: { request_id: string; kind: string; message: string } }) => void>,
+}));
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({ listen }));
 
@@ -20,6 +25,25 @@ describe("compilation queue", () => {
     beforeEach(() => {
         builds.mockReset();
         invoke.mockReset().mockImplementation((command, payload) => command === "compile_preview" ? builds(payload) : Promise.resolve());
+        compileListeners.length = 0;
+        listen.mockReset().mockImplementation(async (_event, listener) => {
+            compileListeners.push(listener);
+            return vi.fn();
+        });
+    });
+
+    it("reports first-run package preparation and clears it after the build", async () => {
+        const first = deferred();
+        builds.mockReturnValueOnce(first.promise);
+        const { result } = renderHook(() => useCompiler("/project/main.tex"));
+        await waitFor(() => expect(compileListeners).toHaveLength(1));
+        const requestId = builds.mock.calls[0][0].requestId;
+        act(() => compileListeners[0]({ payload: { request_id: requestId, kind: "package", message: "Downloading package index" } }));
+        expect(result.current.preparingPackages).toBe(true);
+        expect(result.current.activity).toBe("Downloading package index");
+        await act(async () => first.resolve("/project/main.pdf"));
+        expect(result.current.preparingPackages).toBe(false);
+        expect(result.current.activity).toBeNull();
     });
 
     it("coalesces repeated changes and never publishes an obsolete revision", async () => {

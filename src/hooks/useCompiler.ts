@@ -29,6 +29,8 @@ export function useCompiler(rootFile: string | null, automatic = true) {
     const [status, setStatus] = useState<'Ready' | 'Compiling...' | 'Error' | 'Cancelled' | 'Outdated'>('Ready');
     const [error, setError] = useState<string | null>(null);
     const [log, setLog] = useState("");
+    const [activity, setActivity] = useState<string | null>(null);
+    const [preparingPackages, setPreparingPackages] = useState(false);
     const rootRef = useRef(rootFile);
     const revision = useRef(0);
     const pending = useRef<CompileRequest | null>(null);
@@ -64,6 +66,11 @@ export function useCompiler(rootFile: string | null, automatic = true) {
                         if (payload.kind === "started" && task.cancelled) cancelActive();
                         if (mounted.current && task.revision === revision.current) {
                             setLog(previous => `${previous}${payload.message}\n`.slice(-524_288));
+                            if (payload.kind === "package") {
+                                const message = payload.message.trim().split(/\r?\n/).filter(Boolean).pop();
+                                setPreparingPackages(true);
+                                setActivity(message?.trim() || "Preparing LaTeX packages");
+                            }
                         }
                     });
                     if (!mounted.current || task.cancelled) continue;
@@ -75,6 +82,8 @@ export function useCompiler(rootFile: string | null, automatic = true) {
                         setLog(result.log);
                         setError(null);
                         setStatus('Ready');
+                        setActivity(null);
+                        setPreparingPackages(false);
                     }
                 } catch (failure) {
                     if (mounted.current && request.revision === revision.current && request.root === rootRef.current) {
@@ -97,6 +106,8 @@ export function useCompiler(rootFile: string | null, automatic = true) {
         if (!rootRef.current || !mounted.current) return;
         pending.current = { root: rootRef.current, revision: ++revision.current };
         setStatus('Compiling...');
+        setActivity("Starting Tectonic");
+        setPreparingPackages(false);
         void drain();
     }, [drain]);
 
@@ -111,6 +122,8 @@ export function useCompiler(rootFile: string | null, automatic = true) {
         cancelActive();
         setStatus('Cancelled');
         setError(null);
+        setActivity(null);
+        setPreparingPackages(false);
     }, [cancelActive]);
 
     useEffect(() => {
@@ -123,6 +136,8 @@ export function useCompiler(rootFile: string | null, automatic = true) {
         setError(null);
         setLog("");
         setStatus('Ready');
+        setActivity(null);
+        setPreparingPackages(false);
         if (automaticRef.current) requestCompile();
         return () => {
             mounted.current = false;
@@ -132,5 +147,5 @@ export function useCompiler(rootFile: string | null, automatic = true) {
         };
     }, [rootFile, requestCompile, cancelActive]);
 
-    return { pdfPath, pdfRevision, status, error, log, requestCompile, sourceSaved, cancelCompile };
+    return { pdfPath, pdfRevision, status, error, log, activity, preparingPackages, requestCompile, sourceSaved, cancelCompile };
 }
