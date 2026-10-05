@@ -91,7 +91,12 @@ jobs:
         run: |
           mkdir -p src-tauri/binaries
           curl --fail --location --show-error -o tectonic.tar.gz "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%40${{ env.TECTONIC_VERSION }}/${{ matrix.tectonic_asset }}"
-          echo "${{ matrix.tectonic_sha256 }}  tectonic.tar.gz" | sha256sum --check --strict
+          if command -v sha256sum >/dev/null; then
+            actual=$(sha256sum tectonic.tar.gz | awk '{print $1}')
+          else
+            actual=$(shasum -a 256 tectonic.tar.gz | awk '{print $1}')
+          fi
+          test "$actual" = "${{ matrix.tectonic_sha256 }}"
           tar -xzf tectonic.tar.gz
           mv tectonic src-tauri/binaries/tectonic-${{ matrix.target }}
           chmod +x src-tauri/binaries/tectonic-${{ matrix.target }}
