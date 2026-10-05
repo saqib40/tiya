@@ -27,6 +27,8 @@
           "cmd": "pdflatex",
           "args": [
             "-interaction=nonstopmode",
+            "-halt-on-error",
+            "-synctex=1",
             "-output-directory",
             {
               "validator": ".*"

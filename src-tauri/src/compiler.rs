@@ -69,6 +69,14 @@ fn output_kind(message: &str) -> &'static str {
     }
 }
 
+fn backend_name(backend: &str) -> Result<&'static str, String> {
+    match backend {
+        "tectonic" => Ok("Tectonic"),
+        "pdflatex" => Ok("pdflatex"),
+        _ => Err("Unknown LaTeX backend".into()),
+    }
+}
+
 async fn terminate(child: CommandChild, events: &mut tauri::async_runtime::Receiver<CommandEvent>) {
     let _ = child.kill();
     let _ = tokio::time::timeout(Duration::from_secs(5), async {
@@ -170,7 +178,9 @@ pub async fn compile(
     state: &CompilerState,
     request_id: &str,
     file_path: &Path,
+    backend: &str,
 ) -> Result<CompileResult, String> {
+    let engine_name = backend_name(backend)?;
     let _guard = state.gate.lock().await;
     let root = fs::canonicalize(file_path).map_err(|error| error.to_string())?;
     let parent = root.parent().ok_or("Invalid root document")?;
@@ -182,37 +192,53 @@ pub async fn compile(
         .prefix(".tiya-build-")
         .tempdir_in(parent)
         .map_err(|error| error.to_string())?;
-    let command = app
-        .shell()
-        .sidecar("tectonic")
-        .map_err(|error| error.to_string())?
-        .current_dir(parent)
-        .args([
-            "-X",
-            "compile",
-            "--keep-logs",
-            "--print",
-            "--synctex",
-            "--untrusted",
-            "--outdir",
-        ])
-        .arg(output_dir.path())
-        .arg(&root);
+    let command = match backend {
+        "tectonic" => app
+            .shell()
+            .sidecar("tectonic")
+            .map_err(|error| error.to_string())?
+            .current_dir(parent)
+            .args([
+                "-X",
+                "compile",
+                "--keep-logs",
+                "--print",
+                "--synctex",
+                "--untrusted",
+                "--outdir",
+            ])
+            .arg(output_dir.path())
+            .arg(&root),
+        "pdflatex" => app
+            .shell()
+            .command("pdflatex")
+            .current_dir(parent)
+            .args([
+                "-interaction=nonstopmode",
+                "-halt-on-error",
+                "-synctex=1",
+                "-output-directory",
+            ])
+            .arg(output_dir.path())
+            .arg(&root),
+        _ => unreachable!(),
+    };
     let (sender, receiver) = oneshot::channel();
     *state.active.lock().map_err(|error| error.to_string())? =
         Some((request_id.to_owned(), sender));
+    let starting = format!("Starting {engine_name}");
     let _ = app.emit(
         "compile-output",
         CompileEvent {
             request_id,
             kind: "started",
-            message: "Starting Tectonic",
+            message: &starting,
         },
     );
     let preparing_packages = AtomicBool::new(false);
     let result = run_command(command, receiver, Duration::from_secs(300), |message| {
         let kind = output_kind(message);
-        if kind == "package" {
+        if backend == "tectonic" && kind == "package" {
             preparing_packages.store(true, Ordering::Relaxed);
         }
         let _ = app.emit(
@@ -270,6 +296,13 @@ mod tests {
         );
         assert_eq!(output_kind("note: downloading index"), "package");
         assert_eq!(output_kind("Running TeX ..."), "output");
+    }
+
+    #[test]
+    fn rejects_unknown_backends_before_starting_a_process() {
+        assert_eq!(backend_name("tectonic").unwrap(), "Tectonic");
+        assert_eq!(backend_name("pdflatex").unwrap(), "pdflatex");
+        assert_eq!(backend_name("shell").unwrap_err(), "Unknown LaTeX backend");
     }
 
     fn test_command(argument: &str) -> Command {

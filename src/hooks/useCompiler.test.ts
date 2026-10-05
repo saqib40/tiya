@@ -77,7 +77,7 @@ describe("compilation queue", () => {
         expect(builds).toHaveBeenCalledTimes(1);
         await act(async () => oldProject.resolve("/old/main.pdf"));
         expect(result.current.pdfPath).toBeNull();
-        expect(invoke).toHaveBeenLastCalledWith("compile_preview", { filePath: "/new/main.tex", requestId: expect.any(String) });
+        expect(invoke).toHaveBeenLastCalledWith("compile_preview", { filePath: "/new/main.tex", requestId: expect.any(String), backend: "tectonic" });
         await act(async () => newProject.resolve("/new/main.pdf"));
         expect(result.current.pdfPath).toBe("/new/main.pdf");
     });
@@ -118,6 +118,12 @@ describe("compilation queue", () => {
         await act(async () => result.current.requestCompile());
         expect(builds).toHaveBeenCalledTimes(1);
         expect(result.current.status).toBe('Ready');
+    });
+
+    it("passes the selected system backend to each build", async () => {
+        builds.mockResolvedValue({ pdf_path: "/project/main.pdf", log: "Success" });
+        renderHook(() => useCompiler("/project/main.tex", true, "pdflatex"));
+        await waitFor(() => expect(builds).toHaveBeenCalledWith(expect.objectContaining({ backend: "pdflatex" })));
     });
 
     it("cancels the running build and drops the queued build", async () => {

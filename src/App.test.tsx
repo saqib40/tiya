@@ -69,7 +69,7 @@ describe("project compilation", () => {
 
         expect(screen.getByText("PDF: /project/main.pdf")).toBeInTheDocument();
         const builds = invoke.mock.calls.filter(([command]) => command === "compile_preview");
-        expect(builds).toEqual([["compile_preview", { filePath: "/project/main.tex", requestId: expect.any(String) }]]);
+        expect(builds).toEqual([["compile_preview", { filePath: "/project/main.tex", requestId: expect.any(String), backend: "tectonic" }]]);
     });
 
     it("rebuilds the root after saving bibliography changes", async () => {
@@ -86,7 +86,7 @@ describe("project compilation", () => {
         });
         expect(invoke).toHaveBeenCalledWith("save_file", { path: "/project/references.bib", content: "Updated bibliography", expectedContent: "Bibliography" });
         expect(invoke.mock.calls.filter(([command]) => command === "compile_preview").slice(-1)[0])
-            .toEqual(["compile_preview", { filePath: "/project/main.tex", requestId: expect.any(String) }]);
+            .toEqual(["compile_preview", { filePath: "/project/main.tex", requestId: expect.any(String), backend: "tectonic" }]);
     });
 
     it("opens a diagnostic source through project-scoped resolution", async () => {
@@ -199,11 +199,12 @@ describe("project compilation", () => {
         await screen.findByRole('textbox', { name: 'Source' });
         fireEvent.click(screen.getByRole('button', { name: 'Preferences' }));
         fireEvent.change(screen.getByRole('combobox', { name: 'Theme' }), { target: { value: 'light' } });
+        fireEvent.change(screen.getByRole('combobox', { name: 'LaTeX engine' }), { target: { value: 'pdflatex' } });
         fireEvent.change(screen.getByRole('spinbutton', { name: 'Editor font size' }), { target: { value: '18' } });
         fireEvent.click(screen.getByRole('checkbox', { name: 'Word wrap' }));
         fireEvent.click(screen.getByRole('button', { name: 'Done' }));
         expect(document.documentElement.dataset.theme).toBe('light');
-        expect(readWorkspace().appearance).toMatchObject({ theme: 'light', fontSize: 18, wordWrap: false });
+        expect(readWorkspace()).toMatchObject({ compilerBackend: 'pdflatex', appearance: { theme: 'light', fontSize: 18, wordWrap: false } });
         fireEvent.click(screen.getByRole('button', { name: 'PDF view' }));
         expect(screen.queryByRole('textbox', { name: 'Source' })).not.toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Source view' }));

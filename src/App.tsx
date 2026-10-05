@@ -42,8 +42,9 @@ function App() {
     const [latexSymbols, setLatexSymbols] = useState<LatexSymbols>({ labels: [], citations: [] });
     const [projectError, setProjectError] = useState<string | null>(null);
     const automaticCompile = workspace.automaticCompile;
+    const compilerBackend = workspace.compilerBackend;
     const [editorLocation, setEditorLocation] = useState<EditorLocation | null>(null);
-    const compiler = useCompiler(rootFile, automaticCompile);
+    const compiler = useCompiler(rootFile, automaticCompile, compilerBackend);
     const sync = useSynctex(compiler.pdfPath, compiler.pdfRevision, rootFile);
     const [pdfLocation, setPdfLocation] = useState<(SyncBox & { revision: number }) | null>(null);
     const documents = useDocuments(compiler.sourceSaved);
@@ -464,6 +465,7 @@ function App() {
                 <h2 id="preferences-title" className="mb-5 text-lg font-semibold">Preferences</h2>
                 <div className="flex flex-col gap-4 text-sm">
                     <label className="flex items-center justify-between gap-4">Theme<select value={appearance.theme} onChange={event => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, theme: event.target.value as 'dark' | 'light' } }))} className="rounded border border-slate-600 bg-slate-950 px-2 py-1"><option value="dark">Dark</option><option value="light">Light</option></select></label>
+                    <label className="flex items-center justify-between gap-4">LaTeX engine<select value={compilerBackend} onChange={event => setWorkspace(previous => ({ ...previous, compilerBackend: event.target.value as 'tectonic' | 'pdflatex' }))} className="rounded border border-slate-600 bg-slate-950 px-2 py-1"><option value="tectonic">Bundled Tectonic</option><option value="pdflatex">System pdflatex</option></select></label>
                     <label className="flex items-center justify-between gap-4">Editor font size<input type="number" min={10} max={24} value={appearance.fontSize} onChange={event => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, fontSize: Math.max(10, Math.min(24, Number(event.target.value) || 14)) } }))} className="w-20 rounded border border-slate-600 bg-slate-950 px-2 py-1" /></label>
                     <label className="flex items-center justify-between gap-4">Word wrap<input type="checkbox" checked={appearance.wordWrap} onChange={event => setWorkspace(previous => ({ ...previous, appearance: { ...previous.appearance, wordWrap: event.target.checked } }))} /></label>
                     <button onClick={() => setPreferencesOpen(false)} className="mt-2 self-end rounded border border-slate-600 px-3 py-2">Done</button>

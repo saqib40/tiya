@@ -8,6 +8,7 @@ export interface WorkspaceState {
     lastProject: string | null;
     sessions: Record<string, ProjectSession>;
     automaticCompile: boolean;
+    compilerBackend: 'tectonic' | 'pdflatex';
     appearance: WorkspaceAppearance;
 }
 
@@ -23,7 +24,7 @@ export interface WorkspaceAppearance {
 const key = "tiya.workspace.v1";
 
 export function readWorkspace(): WorkspaceState {
-    const fallback: WorkspaceState = { recentProjects: [], lastProject: null, sessions: {}, automaticCompile: true, appearance: { theme: 'dark', fontSize: 14, wordWrap: true, view: 'split', sidebar: true, layout: { files: 20, editor: 40, preview: 40 } } };
+    const fallback: WorkspaceState = { recentProjects: [], lastProject: null, sessions: {}, automaticCompile: true, compilerBackend: 'tectonic', appearance: { theme: 'dark', fontSize: 14, wordWrap: true, view: 'split', sidebar: true, layout: { files: 20, editor: 40, preview: 40 } } };
     try {
         const value = JSON.parse(localStorage.getItem(key) || "null");
         if (!value || typeof value !== "object") return fallback;
@@ -38,7 +39,7 @@ export function readWorkspace(): WorkspaceState {
         const appearance = value.appearance || {};
         const layout = appearance.layout;
         const validLayout = layout && ['files', 'editor', 'preview'].every(panel => Number.isFinite(layout[panel]) && layout[panel] > 0) && Math.abs(layout.files + layout.editor + layout.preview - 100) < 0.1;
-        return { recentProjects, sessions, lastProject: typeof value.lastProject === "string" ? value.lastProject : null, automaticCompile: value.automaticCompile !== false, appearance: {
+        return { recentProjects, sessions, lastProject: typeof value.lastProject === "string" ? value.lastProject : null, automaticCompile: value.automaticCompile !== false, compilerBackend: value.compilerBackend === 'pdflatex' ? 'pdflatex' : 'tectonic', appearance: {
             theme: appearance.theme === 'light' ? 'light' : 'dark',
             fontSize: Number.isFinite(appearance.fontSize) ? Math.max(10, Math.min(24, Math.round(appearance.fontSize))) : 14,
             wordWrap: appearance.wordWrap !== false,

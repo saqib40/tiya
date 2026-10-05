@@ -6,7 +6,7 @@ Tiya is a local, private LaTeX editor with a bundled Tectonic engine. Open a pro
 
 Download the latest Linux, macOS, or Windows installer from the [latest release](https://github.com/saqib40/tiya/releases/latest).
 
-Tectonic is included. Some advanced projects that require XeLaTeX, LuaLaTeX, shell escape, or external system tools are not yet supported.
+Tectonic is included and remains the default. Projects that need a traditional TeX distribution can select **System pdflatex** in Preferences when `pdflatex` is installed and available on `PATH`. XeLaTeX, LuaLaTeX, shell escape, and custom engine commands are not yet supported.
 
 ## Features
 
@@ -17,6 +17,7 @@ Tectonic is included. Some advanced projects that require XeLaTeX, LuaLaTeX, she
 - Article, report, CV, and presentation templates
 - Safe Overleaf ZIP import and image/PDF asset previews
 - Automatic or manual builds with cancellable, streamed compiler output
+- Optional system `pdflatex` backend
 
 ## Development
 

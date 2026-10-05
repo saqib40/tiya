@@ -95,8 +95,8 @@ async fn import_file(source: String, destination: String) -> Result<(), String> 
 }
 
 #[tauri::command]
-async fn compile_preview(app_handle: tauri::AppHandle, state: tauri::State<'_, compiler::CompilerState>, file_path: String, request_id: String) -> Result<compiler::CompileResult, String> {
-    compiler::compile(&app_handle, &state, &request_id, Path::new(&file_path)).await
+async fn compile_preview(app_handle: tauri::AppHandle, state: tauri::State<'_, compiler::CompilerState>, file_path: String, request_id: String, backend: String) -> Result<compiler::CompileResult, String> {
+    compiler::compile(&app_handle, &state, &request_id, Path::new(&file_path), &backend).await
 }
 
 #[tauri::command]

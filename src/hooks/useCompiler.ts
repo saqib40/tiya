@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 interface CompileRequest {
     root: string;
     revision: number;
+    backend: 'tectonic' | 'pdflatex';
 }
 
 interface RunningBuild extends CompileRequest {
@@ -23,7 +24,7 @@ interface CompileEvent {
     message: string;
 }
 
-export function useCompiler(rootFile: string | null, automatic = true) {
+export function useCompiler(rootFile: string | null, automatic = true, backend: 'tectonic' | 'pdflatex' = 'tectonic') {
     const [pdfPath, setPdfPath] = useState<string | null>(null);
     const [pdfRevision, setPdfRevision] = useState(0);
     const [status, setStatus] = useState<'Ready' | 'Compiling...' | 'Error' | 'Cancelled' | 'Outdated'>('Ready');
@@ -32,6 +33,7 @@ export function useCompiler(rootFile: string | null, automatic = true) {
     const [activity, setActivity] = useState<string | null>(null);
     const [preparingPackages, setPreparingPackages] = useState(false);
     const rootRef = useRef(rootFile);
+    const backendRef = useRef(backend);
     const revision = useRef(0);
     const pending = useRef<CompileRequest | null>(null);
     const running = useRef(false);
@@ -75,7 +77,7 @@ export function useCompiler(rootFile: string | null, automatic = true) {
                     });
                     if (!mounted.current || task.cancelled) continue;
                     setLog("");
-                    const result = await invoke<CompileResult>("compile_preview", { filePath: request.root, requestId: task.id });
+                    const result = await invoke<CompileResult>("compile_preview", { filePath: request.root, requestId: task.id, backend: request.backend });
                     if (mounted.current && request.revision === revision.current && request.root === rootRef.current) {
                         setPdfPath(result.pdf_path);
                         setPdfRevision(value => value + 1);
@@ -104,9 +106,9 @@ export function useCompiler(rootFile: string | null, automatic = true) {
 
     const requestCompile = useCallback(() => {
         if (!rootRef.current || !mounted.current) return;
-        pending.current = { root: rootRef.current, revision: ++revision.current };
+        pending.current = { root: rootRef.current, revision: ++revision.current, backend: backendRef.current };
         setStatus('Compiling...');
-        setActivity("Starting Tectonic");
+        setActivity(`Starting ${backendRef.current === 'tectonic' ? 'Tectonic' : 'pdflatex'}`);
         setPreparingPackages(false);
         void drain();
     }, [drain]);
@@ -129,6 +131,7 @@ export function useCompiler(rootFile: string | null, automatic = true) {
     useEffect(() => {
         mounted.current = true;
         rootRef.current = rootFile;
+        backendRef.current = backend;
         revision.current += 1;
         pending.current = null;
         setPdfPath(null);
@@ -145,7 +148,7 @@ export function useCompiler(rootFile: string | null, automatic = true) {
             pending.current = null;
             cancelActive();
         };
-    }, [rootFile, requestCompile, cancelActive]);
+    }, [rootFile, backend, requestCompile, cancelActive]);
 
     return { pdfPath, pdfRevision, status, error, log, activity, preparingPackages, requestCompile, sourceSaved, cancelCompile };
 }
