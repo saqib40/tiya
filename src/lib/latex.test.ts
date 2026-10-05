@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { latexOutline } from "./latex";
+import { latexCompletionContext, latexOutline } from "./latex";
 
 describe("LaTeX outline", () => {
     it("extracts structural headings with source lines", () => {
@@ -19,5 +19,11 @@ Text
 Text \% not a comment`)).toEqual([
             { title: "Visible", kind: "section", level: 2, line: 2 },
         ]);
+    });
+
+    it("detects label and citation argument fragments", () => {
+        expect(latexCompletionContext(String.raw`See \ref{sec:in`, 15)).toEqual({ kind: "label", startColumn: 10 });
+        expect(latexCompletionContext(String.raw`\cite{first, kn`, 16)).toEqual({ kind: "citation", startColumn: 14 });
+        expect(latexCompletionContext("plain text", 11)).toBeNull();
     });
 });

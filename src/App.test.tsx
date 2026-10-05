@@ -47,6 +47,7 @@ describe("project compilation", () => {
             }
             if (command === "read_file_content") return "Root document";
             if (command === "search_project") return [{ path: "/project/chapter.tex", line: 4, column: 2, preview: "Search result" }];
+            if (command === "latex_symbols") return { labels: ["sec:intro"], citations: ["knuth1984"] };
             if (command === "resolve_project_file") return payload?.requestedPath;
             if (command === "compile_preview") return { pdf_path: "/project/main.pdf", log: "Success" };
             if (command === "cancel_compile") return;
@@ -60,6 +61,7 @@ describe("project compilation", () => {
         fireEvent.click(screen.getByRole("button", { name: "Open project" }));
         await screen.findByText("PDF: /project/main.pdf");
         expect(screen.getByRole("combobox", { name: "Root document" })).toHaveValue("/project/main.tex");
+        expect(invoke).toHaveBeenCalledWith("latex_symbols", { projectPath: "/project" });
         expect(screen.getAllByTestId('panel').map(panel => panel.dataset.defaultSize)).toEqual(['20%', '40%', '40%']);
 
         fireEvent.click(screen.getByRole("button", { name: "Open chapter" }));

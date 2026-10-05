@@ -18,6 +18,12 @@ pub struct SearchMatch {
     pub preview: String,
 }
 
+#[derive(Default, Serialize)]
+pub struct LatexSymbols {
+    pub labels: Vec<String>,
+    pub citations: Vec<String>,
+}
+
 #[derive(Default, Deserialize, Serialize)]
 #[serde(default)]
 struct ProjectSettings {
@@ -331,6 +337,79 @@ pub fn search(project: &Path, query: &str) -> Result<Vec<SearchMatch>, String> {
     Ok(matches)
 }
 
+fn command_values(content: &str, command: &str, values: &mut Vec<String>) {
+    for line in content.lines() {
+        let line = line.split('%').next().unwrap_or("");
+        let mut remainder = line;
+        while let Some(start) = remainder.find(command) {
+            remainder = &remainder[start + command.len()..];
+            let Some(end) = remainder.find('}') else {
+                break;
+            };
+            let value = remainder[..end].trim();
+            if !value.is_empty() {
+                values.push(value.to_owned());
+            }
+            remainder = &remainder[end + 1..];
+        }
+    }
+}
+
+pub fn latex_symbols(project: &Path) -> Result<LatexSymbols, String> {
+    const MAX_FILE_SIZE: u64 = 2 * 1024 * 1024;
+    const MAX_SYMBOLS: usize = 5_000;
+    let directory = fs::canonicalize(project).map_err(|error| error.to_string())?;
+    if !directory.is_dir() {
+        return Err("Select a project folder".into());
+    }
+    let mut files = Vec::new();
+    collect_searchable_files(&directory, &mut files)?;
+    let mut symbols = LatexSymbols::default();
+    for path in files {
+        if fs::metadata(&path)
+            .map_err(|error| error.to_string())?
+            .len()
+            > MAX_FILE_SIZE
+        {
+            continue;
+        }
+        let Ok(content) = fs::read_to_string(&path) else {
+            continue;
+        };
+        if path
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("bib"))
+        {
+            for line in content.lines() {
+                let line = line.trim_start();
+                if !line.starts_with('@') {
+                    continue;
+                }
+                let Some(start) = line.find(['{', '(']) else {
+                    continue;
+                };
+                let Some(end) = line[start + 1..].find(',') else {
+                    continue;
+                };
+                let key = line[start + 1..start + 1 + end].trim();
+                if !key.is_empty() {
+                    symbols.citations.push(key.to_owned());
+                }
+            }
+        } else {
+            command_values(&content, "\\label{", &mut symbols.labels);
+        }
+        if symbols.labels.len() + symbols.citations.len() >= MAX_SYMBOLS {
+            break;
+        }
+    }
+    symbols.labels.sort();
+    symbols.labels.dedup();
+    symbols.citations.sort();
+    symbols.citations.dedup();
+    Ok(symbols)
+}
+
 pub fn load_project(path: &Path) -> Result<ProjectInfo, String> {
     let directory = fs::canonicalize(path).map_err(|error| error.to_string())?;
     if !directory.is_dir() {
@@ -546,6 +625,26 @@ mod tests {
         assert_eq!(results[0].column, 1);
         assert!(results[1].path.ends_with("references.bib"));
         assert!(search(directory.path(), "x").is_err());
+    }
+
+    #[test]
+    fn indexes_labels_and_bibliography_keys() {
+        let directory = tempfile::tempdir().unwrap();
+        fs::write(
+            directory.path().join("main.tex"),
+            "\\label{sec:intro}\n% \\label{hidden}",
+        )
+        .unwrap();
+        fs::write(
+            directory.path().join("references.bib"),
+            "@article{knuth1984,\n title = {Text}\n}",
+        )
+        .unwrap();
+
+        let symbols = latex_symbols(directory.path()).unwrap();
+
+        assert_eq!(symbols.labels, ["sec:intro"]);
+        assert_eq!(symbols.citations, ["knuth1984"]);
     }
 
     #[test]

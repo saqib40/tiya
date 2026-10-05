@@ -4,6 +4,11 @@ export interface ProjectInfo {
     tex_files: string[];
 }
 
+export interface LatexSymbols {
+    labels: string[];
+    citations: string[];
+}
+
 export function relativePath(project: string, path: string): string {
     const normalizedProject = project.replace(/\\/g, "/").replace(/\/$/, "");
     const normalizedPath = path.replace(/\\/g, "/");

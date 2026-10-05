@@ -2,10 +2,11 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import CodeEditor from "./CodeEditor";
 
-const { commands, editor, readText } = vi.hoisted(() => {
+const { commands, completionProviders, editor, readText } = vi.hoisted(() => {
     const commands = new Map<number, () => void>();
     return {
         commands,
+        completionProviders: [] as Array<{ provideCompletionItems: (model: { getLineContent: (line: number) => string }, position: { lineNumber: number; column: number }) => { suggestions: Array<{ label: string; insertText: string }> } }>,
         readText: vi.fn(),
         editor: {
             getModel: vi.fn(() => ({ isDisposed: (): boolean => false })),
@@ -28,9 +29,17 @@ vi.mock("@tauri-apps/plugin-clipboard-manager", () => ({ readText }));
 vi.mock("@monaco-editor/react", async () => {
     const { useEffect } = await import("react");
     return {
-        default: function MockEditor({ onMount, path, keepCurrentModel, saveViewState }: { onMount: (instance: unknown, monaco: unknown) => void; path: string; keepCurrentModel: boolean; saveViewState: boolean }) {
+        default: function MockEditor({ beforeMount, onMount, path, keepCurrentModel, saveViewState }: { beforeMount: (monaco: unknown) => void; onMount: (instance: unknown, monaco: unknown) => void; path: string; keepCurrentModel: boolean; saveViewState: boolean }) {
             useEffect(() => {
-                onMount(editor, { KeyMod: { CtrlCmd: 2048 }, KeyCode: { KeyV: 52, KeyS: 49 }, editor: { getModel: vi.fn() }, Uri: { parse: (path: string) => path } });
+                const monaco = {
+                    KeyMod: { CtrlCmd: 2048 }, KeyCode: { KeyV: 52, KeyS: 49 }, editor: { getModel: vi.fn() }, Uri: { parse: (path: string) => path },
+                    languages: {
+                        register: vi.fn(), setMonarchTokensProvider: vi.fn(), setLanguageConfiguration: vi.fn(), CompletionItemKind: { Reference: 17 },
+                        registerCompletionItemProvider: vi.fn((_language, provider) => { completionProviders.push(provider); return { dispose: vi.fn() }; }),
+                    },
+                };
+                beforeMount(monaco);
+                onMount(editor, monaco);
             }, []);
             return <div data-testid="editor" data-path={path} data-keep-model={keepCurrentModel} data-view-state={saveViewState} />;
         },
@@ -38,7 +47,7 @@ vi.mock("@monaco-editor/react", async () => {
 });
 
 describe("editor save shortcut", () => {
-    beforeEach(() => commands.clear());
+    beforeEach(() => { commands.clear(); completionProviders.length = 0; });
 
     it("saves the latest content after the editor has mounted", () => {
         const save = vi.fn();
@@ -108,5 +117,12 @@ describe("editor save shortcut", () => {
         fireEvent.click(screen.getByRole('menuitem', { name: 'Details' }));
         expect(editor.setPosition).toHaveBeenLastCalledWith({ lineNumber: 3, column: 1 });
         expect(editor.focus).toHaveBeenCalled();
+    });
+
+    it('suggests project labels and citations inside matching commands', () => {
+        render(<CodeEditor code="" onChange={vi.fn()} labels={['sec:intro']} citations={['knuth1984']} />);
+        const provider = completionProviders[0];
+        expect(provider.provideCompletionItems({ getLineContent: () => '\\ref{sec:' }, { lineNumber: 1, column: 10 }).suggestions[0]).toMatchObject({ label: 'sec:intro', insertText: 'sec:intro' });
+        expect(provider.provideCompletionItems({ getLineContent: () => '\\cite{kn' }, { lineNumber: 1, column: 9 }).suggestions[0]).toMatchObject({ label: 'knuth1984' });
     });
 });

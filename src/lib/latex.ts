@@ -5,6 +5,11 @@ export interface LatexOutlineItem {
     line: number;
 }
 
+export interface LatexCompletionContext {
+    kind: 'label' | 'citation';
+    startColumn: number;
+}
+
 const levels: Record<LatexOutlineItem['kind'], number> = {
     chapter: 1,
     section: 2,
@@ -34,4 +39,15 @@ export function latexOutline(source: string): LatexOutlineItem[] {
         }
     });
     return outline;
+}
+
+export function latexCompletionContext(line: string, column: number): LatexCompletionContext | null {
+    const beforeCursor = line.slice(0, Math.max(0, column - 1));
+    const kind = /\\(?:ref|pageref|autoref|eqref)\{[^}]*$/.test(beforeCursor)
+        ? 'label'
+        : /\\(?:cite|citep|citet|nocite)\{[^}]*$/.test(beforeCursor) ? 'citation' : null;
+    if (!kind) return null;
+    const separator = Math.max(beforeCursor.lastIndexOf('{'), beforeCursor.lastIndexOf(','));
+    const whitespace = beforeCursor.slice(separator + 1).match(/^\s*/)?.[0].length ?? 0;
+    return { kind, startColumn: separator + whitespace + 2 };
 }

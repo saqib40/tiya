@@ -36,6 +36,11 @@ fn search_project(project_path: String, query: String) -> Result<Vec<project::Se
 }
 
 #[tauri::command]
+fn latex_symbols(project_path: String) -> Result<project::LatexSymbols, String> {
+    project::latex_symbols(Path::new(&project_path))
+}
+
+#[tauri::command]
 fn resolve_project_file(project_path: String, root_file: String, requested_path: String) -> Result<String, String> {
     project::resolve_file(Path::new(&project_path), Path::new(&root_file), Path::new(&requested_path))
         .map(|path| path.to_string_lossy().into_owned())
@@ -174,6 +179,7 @@ pub fn run() {
             import_project,
             set_project_root,
             search_project,
+            latex_symbols,
             resolve_project_file,
             open_directory,
             read_file_content,

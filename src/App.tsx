@@ -11,7 +11,7 @@ import { useDocuments } from "./hooks/useDocuments";
 import { useCompiler } from "./hooks/useCompiler";
 import { useSynctex } from "./hooks/useSynctex";
 import { forwardSync, inverseSync, SyncBox } from "./lib/synctex";
-import { ProjectInfo, relativePath } from "./lib/project";
+import { LatexSymbols, ProjectInfo, relativePath } from "./lib/project";
 import { Diagnostic, EditorLocation, parseDiagnostics } from "./lib/diagnostics";
 import { readWorkspace, rememberProject, rememberSession, saveWorkspace } from "./lib/workspace";
 
@@ -39,6 +39,7 @@ function App() {
     const [projectPath, setProjectPath] = useState<string | null>(null);
     const [rootFile, setRootFile] = useState<string | null>(null);
     const [texFiles, setTexFiles] = useState<string[]>([]);
+    const [latexSymbols, setLatexSymbols] = useState<LatexSymbols>({ labels: [], citations: [] });
     const [projectError, setProjectError] = useState<string | null>(null);
     const automaticCompile = workspace.automaticCompile;
     const [editorLocation, setEditorLocation] = useState<EditorLocation | null>(null);
@@ -127,6 +128,7 @@ function App() {
         try {
             await documents.flushAll();
             const project = await invoke<ProjectInfo>("load_project", { path });
+            const symbols = await invoke<LatexSymbols>("latex_symbols", { projectPath: project.path }).catch(() => ({ labels: [], citations: [] }));
             const session = workspace.sessions[project.path];
             const candidates = [...new Set([project.root_file, ...(session?.files || [])].filter((file): file is string => Boolean(file)))];
             const opened: Array<{ path: string; content: string }> = [];
@@ -146,6 +148,7 @@ function App() {
             setProjectPath(project.path);
             setRootFile(project.root_file);
             setTexFiles(project.tex_files);
+            setLatexSymbols(symbols);
             for (const file of opened) documents.openDocument(file.path, file.content);
             const active = opened.find(file => file.path === session?.activeFile) || opened[0];
             if (active) documents.openDocument(active.path, active.content);
@@ -171,6 +174,7 @@ function App() {
     const handleSave = async () => {
         try {
             await documents.flushAll();
+            if (projectPath) setLatexSymbols(await invoke<LatexSymbols>("latex_symbols", { projectPath }));
         } catch {
             return;
         }
@@ -235,6 +239,7 @@ function App() {
             setRootFile(project.root_file);
             setTexFiles(project.tex_files);
         }
+        setLatexSymbols(await invoke<LatexSymbols>("latex_symbols", { projectPath }));
         compiler.sourceSaved();
     };
 
@@ -245,8 +250,10 @@ function App() {
         const refreshed = await Promise.all(affected.map(documents.refreshDocument));
         const untracked = paths.some(path => !affected.includes(path));
         const project = await invoke<ProjectInfo>("load_project", { path: projectPath });
+        const symbols = await invoke<LatexSymbols>("latex_symbols", { projectPath });
         setTexFiles(project.tex_files);
         setRootFile(project.root_file);
+        setLatexSymbols(symbols);
         if (untracked || refreshed.some(Boolean)) compiler.sourceSaved();
     };
 
@@ -259,6 +266,7 @@ function App() {
             setAssetPath(null);
             setRootFile(null);
             setProjectPath(null);
+            setLatexSymbols({ labels: [], citations: [] });
             documents.reset();
             setWorkspace(previous => ({ ...previous, lastProject: null }));
         } catch { return; }
@@ -393,6 +401,8 @@ function App() {
                                                 wordWrap={appearance.wordWrap}
                                                 theme={appearance.theme}
                                                 location={editorLocation}
+                                                labels={latexSymbols.labels}
+                                                citations={latexSymbols.citations}
                                             />
                                         ) : (
                                             <div className="h-full w-full flex flex-col items-center justify-center gap-8 select-none">

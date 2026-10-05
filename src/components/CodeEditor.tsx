@@ -1,9 +1,10 @@
 import { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
+import type { editor as MonacoEditor, Position } from 'monaco-editor';
 import { Loader2, Crosshair, ListTree, Save } from 'lucide-react';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { EditorLocation } from '../lib/diagnostics';
-import { latexOutline } from '../lib/latex';
+import { latexCompletionContext, latexOutline } from '../lib/latex';
 
 interface CodeEditorProps {
     code: string;
@@ -16,9 +17,11 @@ interface CodeEditorProps {
     fontSize?: number;
     wordWrap?: boolean;
     theme?: 'dark' | 'light';
+    labels?: string[];
+    citations?: string[];
 }
 
-const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "untitled.tex", openPaths, fontSize = 14, wordWrap = true, theme = 'dark' }: CodeEditorProps) => {
+const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "untitled.tex", openPaths, fontSize = 14, wordWrap = true, theme = 'dark', labels = [], citations = [] }: CodeEditorProps) => {
     const editorRef = useRef<any>(null);
     const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
     const modelPaths = useRef(new Set<string>());
@@ -27,6 +30,8 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
     const [pasteError, setPasteError] = useState<string | null>(null);
     const [outlineOpen, setOutlineOpen] = useState(false);
     const locationRef = useRef(location);
+    const symbolsRef = useRef({ labels, citations });
+    const completionProvider = useRef<{ dispose: () => void } | null>(null);
     const outline = latexOutline(code);
 
     const revealLocation = (target: EditorLocation | null | undefined) => {
@@ -44,6 +49,7 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
     useEffect(() => {
         onSaveRef.current = onSave;
     }, [onSave]);
+    useEffect(() => { symbolsRef.current = { labels, citations }; }, [labels, citations]);
 
     useEffect(() => { modelPaths.current.add(path); }, [path]);
     useEffect(() => {
@@ -57,6 +63,7 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
         }
     }, [openPaths, path]);
     useEffect(() => () => {
+        completionProvider.current?.dispose();
         const monaco = monacoRef.current;
         if (!monaco) return;
         for (const modelPath of modelPaths.current) monaco.editor.getModel(monaco.Uri.parse(modelPath))?.dispose();
@@ -118,6 +125,27 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
                 { open: '(', close: ')' },
                 { open: '$', close: '$' },
             ],
+        });
+
+        completionProvider.current?.dispose();
+        completionProvider.current = monaco.languages.registerCompletionItemProvider('latex', {
+            triggerCharacters: ['{', ','],
+            provideCompletionItems(model: MonacoEditor.ITextModel, position: Position) {
+                const context = latexCompletionContext(model.getLineContent(position.lineNumber), position.column);
+                if (!context) return { suggestions: [] };
+                const values = context.kind === 'label' ? symbolsRef.current.labels : symbolsRef.current.citations;
+                return { suggestions: values.map(value => ({
+                    label: value,
+                    kind: monaco.languages.CompletionItemKind.Reference,
+                    insertText: value,
+                    range: {
+                        startLineNumber: position.lineNumber,
+                        endLineNumber: position.lineNumber,
+                        startColumn: context.startColumn,
+                        endColumn: position.column,
+                    },
+                })) };
+            },
         });
     };
 
