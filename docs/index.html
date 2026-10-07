@@ -1,153 +1,630 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tiya - Local LaTeX Editor</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tiya — Local, Private LaTeX Editor & Studio</title>
+  <meta name="description" content="Tiya is a blazing-fast, private local LaTeX editor with a bundled Tectonic engine. Live preview, bidirectional SyncTeX, and zero TeX Live bloat. Runs natively on macOS, Windows, and Linux.">
+  <meta name="theme-color" content="#030408">
+
+  <!-- OpenGraph / Social Meta -->
+  <meta property="og:title" content="Tiya — Local, Private LaTeX Editor">
+  <meta property="og:description" content="Write LaTeX locally with live preview, bidirectional SyncTeX, and bundled Tectonic. No 5GB TeX Live setup required.">
+  <meta property="og:image" content="screen.png">
+  <meta property="og:type" content="website">
+
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%230047ff'/><text x='50' y='71' font-family='sans-serif' font-weight='800' font-size='66' fill='%23ffffff' text-anchor='middle'>T</text></svg>">
+
+  <!-- Typography -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@600;700;800;900&display=swap" rel="stylesheet">
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <header>
-        <div class="container nav">
-            <div class="logo">Tiya<span class="dot">.</span></div>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#download">Download</a>
-                <a href="#contribute">Contribute</a>
-                <a href="https://github.com/saqib40/tiya" target="_blank" class="github-link">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-                </a>
-            </div>
+  <!-- ======================================================================
+       Floating Sticky Navigation Bar
+       ====================================================================== -->
+  <header class="navbar-wrapper" id="main-navbar">
+    <div class="container nav-container">
+      <div class="nav-brand">
+        <a href="#" class="brand-mark" id="brand-logo-btn" title="Tiya (Click to scroll to top / replay intro)">
+          Tiya<span class="dot">.</span>
+        </a>
+        <span class="brand-version-badge">v0.4.0</span>
+      </div>
+
+      <nav class="nav-links">
+        <a href="#showcase" class="nav-link">Overview</a>
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#comparison" class="nav-link">Comparison</a>
+        <a href="#download" class="nav-link">Download</a>
+        <a href="#contribute" class="nav-link">Contribute</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="https://github.com/saqib40/tiya" target="_blank" rel="noopener noreferrer" class="github-btn" title="View source code on GitHub">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+          <span>Star</span>
+        </a>
+        <a href="#download" class="nav-cta-btn">Get Tiya</a>
+      </div>
+    </div>
+  </header>
+
+  <!-- ======================================================================
+       TOP HERO: Typographic CAD Vector Animation Engine (Intro Curtain)
+       ====================================================================== -->
+  <section class="hero-animation-section cad-grid" id="hero-stage-wrapper" aria-label="Intro Animation">
+    <!-- Skip Intro Control -->
+    <div class="curtain-controls">
+      <button class="curtain-skip-btn" id="curtain-skip-btn" type="button" aria-label="Skip animation">
+        <span>Skip Intro</span>
+        <span class="skip-arrow">&rarr;</span>
+      </button>
+    </div>
+    <!-- Interactive Canvas Stage -->
+    <div class="stage-area" id="stage-area" title="Click to Play / Pause Animation">
+      <div class="camera-rig" id="camera-rig">
+        <svg id="blueprint-svg" class="blueprint-svg" viewBox="0 0 1200 675">
+          <defs>
+            <!-- Electric Glow Filter -->
+            <filter id="glow" x="-25%" y="-25%" width="150%" height="150%">
+              <feGaussianBlur stdDeviation="3.5" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+
+            <!-- Laser Scan Vertical Gradient -->
+            <linearGradient id="laser-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0" />
+              <stop offset="50%" stop-color="#0066ff" stop-opacity="0.9" />
+              <stop offset="100%" stop-color="#ffffff" stop-opacity="1" />
+            </linearGradient>
+          </defs>
+
+          <!-- Electric Blue Background Flash / Fill Layer -->
+          <rect id="electric-bg" x="-3000" y="-3000" width="7000" height="7000" fill="#0047ff" opacity="0" />
+
+          <!-- Construction Baseline matching CAD specifications -->
+          <g id="grid-construction-lines">
+            <!-- Baseline Y = 430 -->
+            <line x1="-1000" y1="430" x2="2200" y2="430" stroke="#ffffff" class="cad-guide" stroke-opacity="0.35" />
+            <!-- Cap Height Y = 190 -->
+            <line x1="-1000" y1="190" x2="2200" y2="190" stroke="#ffffff" class="cad-guide" stroke-opacity="0.14" />
+            <!-- X-Height Y = 270 -->
+            <line x1="-1000" y1="270" x2="2200" y2="270" stroke="#ffffff" class="cad-guide" stroke-dasharray="3 3" stroke-opacity="0.16" />
+            <!-- Descender Y = 515 -->
+            <line x1="-1000" y1="515" x2="2200" y2="515" stroke="#ffffff" class="cad-guide" stroke-dasharray="2 3" stroke-opacity="0.12" />
+            <!-- Crosshair Vertical Guideline -->
+            <line id="guide-vertical" x1="300" y1="-100" x2="300" y2="800" stroke="#ffffff" class="cad-guide" stroke-opacity="0.18" stroke-dasharray="2 2"/>
+          </g>
+
+          <!-- Laser Scanline Indicator (Sweeps across during drafting) -->
+          <line id="laser-scanline" x1="-100" y1="0" x2="-100" y2="675" stroke="url(#laser-grad)" stroke-width="1.8" vector-effect="non-scaling-stroke" opacity="0" filter="url(#glow)"/>
+
+          <!-- Master Typographic Vector Wordmark Group -->
+          <g id="tiya-wordmark-layer" transform="translate(68, 0)">
+            <!-- 'T' Glyph -->
+            <path id="glyph-T" class="cad-stroke" fill="none" stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round" />
+
+            <!-- 'i' Glyph: Circular dot + stem -->
+            <g id="glyph-i-group">
+              <circle id="glyph-i-dot" cx="425" cy="216" r="20" class="cad-stroke" fill="none" stroke="#ffffff" />
+              <path id="glyph-i-stem" class="cad-stroke" d="M 406 270 H 444 V 430 H 406 Z" fill="none" stroke="#ffffff" stroke-linejoin="round" />
+            </g>
+
+            <!-- 'y' Glyph -->
+            <path id="glyph-y" class="cad-stroke" fill="none" stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round" />
+
+            <!-- 'a' Glyph -->
+            <path id="glyph-a" class="cad-stroke" fill-rule="evenodd" fill="none" stroke="#ffffff" stroke-linejoin="round" stroke-linecap="round" />
+          </g>
+
+          <!-- CAD Bézier Handles & Dimension Callouts Layer -->
+          <g id="cad-handles-layer" transform="translate(68, 0)"></g>
+
+          <!-- Drawing Spark / Laser Tip Indicator -->
+          <circle id="laser-spark" cx="-100" cy="-100" r="3" fill="#ffffff" filter="url(#glow)" opacity="0" />
+        </svg>
+      </div>
+    </div>
+
+    <!-- Curtain Dismiss Hint -->
+    <div class="curtain-hint">
+      <span>Scroll or click anywhere to skip &darr;</span>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 2: Intro & Value Proposition
+       ====================================================================== -->
+  <section class="intro-section" id="intro">
+    <div class="radial-glow glow-blue" style="top: -100px; left: 50%; transform: translateX(-50%);"></div>
+
+    <div class="container" style="position: relative; z-index: 1;">
+      <div class="badge-row">
+        <div class="eyebrow-pill">
+          <span class="pulsing-dot"></span>
+          <span>Next-Gen Local LaTeX Studio &bull; Tauri 2 &bull; Rust &bull; Tectonic</span>
         </div>
-    </header>
+      </div>
 
-    <section class="hero">
-        <div class="grid-background"></div>
-        
-        <div class="container hero-content">
-            <h1>Write LaTeX locally.<br><span class="highlight">Preview every change.</span></h1>
-            
-            <div class="hero-actions">
-                <a href="#download" class="cta-button">Get Tiya Now</a>
-            </div>
+      <h1 class="main-headline">
+        Write LaTeX locally.<br>
+        <span class="gradient-headline">Preview every change.</span>
+      </h1>
 
-            <div class="hero-image">
-                <img src="screen.png" alt="Tiya App Screenshot">
-            </div>
+      <p class="main-subheadline">
+        Say goodbye to multi-gigabyte TeX Live installations and sluggish cloud compilation queues. Tiya bundles the modern Tectonic engine into a sleek ~80&nbsp;MB native desktop app with instant builds, bidirectional SyncTeX, and complete local privacy.
+      </p>
+
+      <div class="intro-cta-group">
+        <!-- Primary Download Button (Auto-detected OS via JS) -->
+        <a href="#download" class="primary-cta-btn" id="primary-download-btn">
+          <span class="btn-icon">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+          </span>
+          <span class="btn-text">
+            <span class="btn-subtext">Download Tiya</span>
+            <span class="btn-maintext">Get Version 0.4.0</span>
+          </span>
+          <span class="btn-badge">~80 MB</span>
+        </a>
+
+        <!-- Secondary GitHub Repo Button -->
+        <a href="https://github.com/saqib40/tiya" target="_blank" rel="noopener noreferrer" class="secondary-cta-btn">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+          </svg>
+          <span>Star on GitHub</span>
+        </a>
+      </div>
+
+      <!-- Quick Metrics Grid -->
+      <div class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-val">~80 MB</div>
+          <div class="metric-label">Lightweight Footprint vs 5GB+ TeX Live</div>
         </div>
-    </section>
-
-    <section id="features" class="features">
-        <div class="container">
-            <div class="feature-grid">
-                <div class="feature-item">
-                    <h3>Live Preview</h3>
-                    <p>See your PDF update instantly as you type.</p>
-                </div>
-                <div class="feature-item">
-                    <h3>Cross-Platform</h3>
-                    <p>Runs natively on Windows, macOS, and Linux.</p>
-                </div>
-                <div class="feature-item">
-                    <h3>Private by Default</h3>
-                    <p>Your projects stay on your computer.</p>
-                </div>
-            </div>
+        <div class="metric-card">
+          <div class="metric-val">&lt; 100 ms</div>
+          <div class="metric-label">Fast Incremental Compilation</div>
         </div>
-    </section>
-
-    <section id="download" class="downloads-section">
-        <div class="container">
-            <h2 class="section-title">Download Tiya</h2>
-            
-            <div class="download-grid">
-                <div class="download-card recommended">
-                    <div class="card-header">
-                        <span class="card-badge">Current release</span>
-                        <h2>Tiya 0.4</h2>
-                    </div>
-                    <p class="description">"It just works." Built-in Tectonic engine. No setup required.</p>
-                    
-                    <div class="specs">
-                        <div class="spec-item">
-                            <span class="label">Size</span>
-                            <span class="value">~80 MB</span>
-                        </div>
-                        <div class="spec-item">
-                            <span class="label">Engine</span>
-                            <span class="value">Tectonic</span>
-                        </div>
-                    </div>
-
-                    <div class="os-downloads">
-                        <div class="os-group">
-                            <div class="os-header">
-                                <svg class="os-icon" viewBox="0 0 24 24"><path d="M3 12V6.75L9 5.43V11.91L3 12ZM20 4.12L10 5.33V11.86L20 12V4.12ZM3 13L9 13.09V19.9L3 18.75V13ZM20 13.1V20.78L10 19.98V13.15L20 13.1Z"/></svg>
-                                Windows
-                            </div>
-                            <div class="btn-group">
-                                <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_x64-setup.exe" class="dl-btn primary">Download .exe</a>
-                                <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_x64_en-US.msi" class="dl-btn secondary">.msi</a>
-                            </div>
-                        </div>
-
-                        <div class="os-group">
-                            <div class="os-header">
-                                <svg class="os-icon" viewBox="0 0 384 512"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.59c0 62.6 24 121 57.7 166.5 17 22.7 36 46.9 59.5 46.4 23.7-.4 32.6-17.3 61.1-17.3 27.8 0 36 17.3 60.6 17.3 24.5-.5 41.9-22 58.4-45.4 17.7-25.3 25.2-49.7 26.1-51.6-59.8-31-68.7-115.2-69.1-120.8zM242.5 100.9c13.7-21.2 21.8-42.3 17-62.8-19.4 1.5-44 12.6-61 37.8-13.8 21.2-23.5 46.1-17.6 65.8 22.7 1.2 46.9-16.7 61.6-40.8zm0 0"/></svg>
-                                macOS (Apple Silicon)
-                            </div>
-                            <div class="btn-group">
-                                <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_aarch64.dmg" class="dl-btn primary">Download .dmg</a>
-                                <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_aarch64.app.tar.gz" class="dl-btn secondary">.tar.gz</a>
-                            </div>
-                        </div>
-
-                        <div class="os-group">
-                            <div class="os-header">
-                                <svg class="os-icon" viewBox="0 0 24 24"><path d="M20.06 12.32a7.13 7.13 0 0 0-3.31-2.13c.44-1 .93-1.8 1.58-2.47c2-2.18 1.53-4.06.9-5.31c-.69-1.41-2.13-2.31-3.84-2.37a7.57 7.57 0 0 0-3.06.75a6.88 6.88 0 0 0-3.09-.75c-1.69.06-3.13 1-3.81 2.37c-.63 1.28-1.06 3.16.91 5.31c.62.66 1.12 1.47 1.56 2.47a7.13 7.13 0 0 0-3.31 2.13c-2 2.4-1.81 5.21-1.34 7.06c.22 1.1.6 2.32 1.59 3.66a8.84 8.84 0 0 0 3.28 2.9c1.82.89 4.23.89 5.63 0a9.42 9.42 0 0 0 3.28-2.9c1-1.35 1.37-2.57 1.59-3.66c.47-1.85.63-4.66-1.4-7.06m-4.84 9.12c-.66.22-1.75.34-3.22.34s-2.56-.12-3.22-.34a7.91 7.91 0 0 1-2.62-2a14.69 14.69 0 0 1-1.31-2.84a5 5 0 0 1-.34-1.44c-.16-1.06-.09-2.63 1.09-4.06a5.78 5.78 0 0 1 2.62-1.72a7.44 7.44 0 0 1-.59-2.06A3.4 3.4 0 0 1 8 6.22c.38-.72.91-1 1.53-1s1.34.38 1.69 1a5.88 5.88 0 0 1 1.06 2.65h.56A5.88 5.88 0 0 1 13.94 6.22c.38-.72.91-1 1.53-1s1.34.38 1.69 1a3.4 3.4 0 0 1 .41 1.09a7.44 7.44 0 0 1-.59 2.06a5.78 5.78 0 0 1 2.62 1.72c1.22 1.43 1.25 3 1.09 4.06a5 5 0 0 1-.34 1.44a14.69 14.69 0 0 1-1.31 2.84a7.91 7.91 0 0 1-2.62 2M9.87 15a1.66 1.66 0 1 1 1.66-1.66A1.66 1.66 0 0 1 9.87 15m5.82-1.66a1.66 1.66 0 1 1-1.66 1.66a1.66 1.66 0 0 1 1.66-1.66z"/></svg>
-                                Linux
-                            </div>
-                            <div class="btn-group">
-                                <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_amd64.deb" class="dl-btn primary">.deb</a>
-                                <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya-0.4.0-1.x86_64.rpm" class="dl-btn secondary">.rpm</a>
-                                <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_amd64.AppImage" class="dl-btn secondary">AppImage</a>
-                            </div>
-                        </div>
-                    </div>
-
-                    <p class="internet-note">
-                        <strong>Note:</strong> Downloads packages on first run. Works offline after.
-                    </p>
-                </div>
-
-            </div>
-
-            <div class="mac-warning">
-                <h3>⚠️ macOS Users</h3>
-                <p>App not notarized yet? Fix "Damaged" error:</p>
-                <pre><code>xattr -cr /Applications/Tiya.app</code></pre>
-            </div>
-
+        <div class="metric-card">
+          <div class="metric-val">100%</div>
+          <div class="metric-label">Private &amp; Offline on Your Machine</div>
         </div>
-    </section>
+        <div class="metric-card">
+          <div class="metric-val">2-Way</div>
+          <div class="metric-label">Bidirectional SyncTeX Navigation</div>
+        </div>
+      </div>
+    </div>
+  </section>
 
-    <section id="contribute" class="contribute-section">
-        <div class="container contribute-content">
-            <h2>Contribute</h2>
-            <p>Built with <a href="https://tauri.app/">Tauri</a>, <a href="https://reactjs.org/">React</a>, and <a href="https://www.rust-lang.org/">Rust</a>.</p>
-            
-            <div class="code-block">
-                <pre><code>git clone https://github.com/saqib40/tiya.git
+  <!-- ======================================================================
+       SECTION 3: Interactive App Showcase & Interface Tour
+       ====================================================================== -->
+  <section class="showcase-section" id="showcase">
+    <div class="radial-glow glow-sky" style="top: 15%; right: -100px;"></div>
+
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Workspace Preview</span>
+        <h2 class="section-title">Designed for focused writing and instant visual feedback.</h2>
+        <p class="section-desc">Experience a responsive split workspace where your source code and compiled PDF paper stay in perpetual synchronization.</p>
+      </div>
+
+      <!-- High-Fidelity Studio Window Mockup -->
+      <div class="studio-window-wrapper">
+        <div class="studio-titlebar">
+          <div class="traffic-lights">
+            <span class="light-dot red"></span>
+            <span class="light-dot yellow"></span>
+            <span class="light-dot green"></span>
+          </div>
+
+          <div class="window-title">
+            <svg class="doc-icon" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span>quantum_field_theory.tex &mdash; Tiya Desktop Studio</span>
+          </div>
+
+          <div class="window-status">
+            <span>Tectonic Engine: Ready (8ms)</span>
+          </div>
+        </div>
+
+        <div class="studio-viewport">
+          <img src="screen.png" alt="Tiya Desktop App Screenshot showing Monaco Editor and live PDF rendering" class="studio-screenshot">
+        </div>
+      </div>
+
+      <!-- Interactive Tour Callout Bar -->
+      <div class="tour-nav-container">
+        <div class="feature-tour-pills">
+          <button class="feature-tour-pill active" data-target="editor">Monaco Editor Core</button>
+          <button class="feature-tour-pill" data-target="synctex">Bidirectional SyncTeX</button>
+          <button class="feature-tour-pill" data-target="tectonic">Embedded Tectonic Engine</button>
+          <button class="feature-tour-pill" data-target="preview">High-DPI PDF Previewer</button>
+        </div>
+
+        <div class="tour-callout-card" id="tour-callout">
+          <div class="callout-title" id="tour-callout-title">Monaco Editor Core</div>
+          <div class="callout-desc" id="tour-callout-desc">Full syntax highlighting, bracket colorization, multi-cursor editing, and bundled high-readability typography.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 4: Bento Features Grid
+       ====================================================================== -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Core Capabilities</span>
+        <h2 class="section-title">Everything you need. None of the distribution bloat.</h2>
+        <p class="section-desc">Engineered from the ground up for speed, reliability, and clean desktop ergonomics.</p>
+      </div>
+
+      <div class="bento-grid">
+        <!-- Bento 1: Tectonic Engine (Wide span) -->
+        <div class="bento-card span-2">
+          <div class="bento-icon-wrapper">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+          </div>
+          <h3>Zero-Config Embedded Tectonic Engine</h3>
+          <p>
+            Traditional TeX distributions like MacTeX and TeX Live take 5+ GB and hours of fragile Perl script configuration. Tiya packages the modernized Rust-based Tectonic engine directly inside the app. It automatically downloads required CTAN packages on first build, then caches them offline forever.
+          </p>
+          <div class="bento-visual-snippet">
+            <span class="tag">ENGINE</span>
+            <code>tectonic --keep-intermediates --outdir .build thesis.tex</code>
+          </div>
+        </div>
+
+        <!-- Bento 2: Local Privacy -->
+        <div class="bento-card">
+          <div class="bento-icon-wrapper">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+            </svg>
+          </div>
+          <h3>100% Private by Default</h3>
+          <p>
+            Your drafts, patent submissions, proprietary data tables, and unpublished research papers never leave your computer. No cloud accounts, no subscription paywalls, and no third-party telemetry.
+          </p>
+          <div class="bento-visual-snippet">
+            <span class="tag">STORAGE</span>
+            <span>100% Local Filesystem</span>
+          </div>
+        </div>
+
+        <!-- Bento 3: Bidirectional SyncTeX -->
+        <div class="bento-card">
+          <div class="bento-icon-wrapper">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"/>
+            </svg>
+          </div>
+          <h3>Bidirectional SyncTeX</h3>
+          <p>
+            Click anywhere in your LaTeX code to immediately jump to the matching coordinate in the rendered PDF. Cmd/Ctrl-click in the PDF preview to snap the editor directly to that source line.
+          </p>
+          <div class="bento-visual-snippet">
+            <span class="tag">NAVIGATION</span>
+            <span>Code &harr; PDF Coordinate Sync</span>
+          </div>
+        </div>
+
+        <!-- Bento 4: Multi-File Root Compilation -->
+        <div class="bento-card">
+          <div class="bento-icon-wrapper">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/>
+            </svg>
+          </div>
+          <h3>Project-Aware Root Compilation</h3>
+          <p>
+            Handles complex multi-file projects with <code>\input</code>, <code>\include</code>, subfiles, and <code>.bib</code> bibliographies. Easily select your root document or let Tiya detect it automatically.
+          </p>
+          <div class="bento-visual-snippet">
+            <span class="tag">STRUCTURE</span>
+            <span>Multi-tab &bull; Root Document Lock</span>
+          </div>
+        </div>
+
+        <!-- Bento 5: Safe Overleaf Import & System pdflatex -->
+        <div class="bento-card">
+          <div class="bento-icon-wrapper">
+            <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+            </svg>
+          </div>
+          <h3>Overleaf Import &amp; pdflatex Backend</h3>
+          <p>
+            Safely import existing Overleaf ZIP archives with image and asset preview support. Need custom compatibility? Seamlessly switch between bundled Tectonic and your system <code>pdflatex</code> in Preferences.
+          </p>
+          <div class="bento-visual-snippet">
+            <span class="tag">BACKEND</span>
+            <span>Tectonic &bull; System pdflatex</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 5: Comparison Matrix
+       ====================================================================== -->
+  <section class="comparison-section" id="comparison">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Why Tiya</span>
+        <h2 class="section-title">How Tiya stacks up against traditional workflows.</h2>
+        <p class="section-desc">See why engineers and researchers are moving to a native local setup.</p>
+      </div>
+
+      <div class="comparison-table-wrapper">
+        <table class="comparison-table">
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th class="col-tiya">Tiya Studio</th>
+              <th>Cloud Editors (Overleaf)</th>
+              <th>VS Code + TeX Live</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Installation Size</strong></td>
+              <td class="col-tiya">~80 MB (Lightweight)</td>
+              <td>0 MB (Browser)</td>
+              <td>5.5 GB+ (Massive)</td>
+            </tr>
+            <tr>
+              <td><strong>Setup Time</strong></td>
+              <td class="col-tiya"><span class="badge-yes">&check; 1-Click Install</span></td>
+              <td>Sign up &amp; upload</td>
+              <td>Hours (PATH &amp; Perl config)</td>
+            </tr>
+            <tr>
+              <td><strong>Offline Functionality</strong></td>
+              <td class="col-tiya"><span class="badge-yes">&check; 100% Offline</span></td>
+              <td><span class="badge-no">&times; Requires Internet</span></td>
+              <td><span class="badge-yes">&check; Offline</span></td>
+            </tr>
+            <tr>
+              <td><strong>Privacy &amp; Data Ownership</strong></td>
+              <td class="col-tiya"><span class="badge-yes">&check; Strictly On-Device</span></td>
+              <td><span class="badge-no">&times; Cloud Servers</span></td>
+              <td><span class="badge-yes">&check; On-Device</span></td>
+            </tr>
+            <tr>
+              <td><strong>Bidirectional SyncTeX</strong></td>
+              <td class="col-tiya"><span class="badge-yes">&check; Built-in &amp; Instant</span></td>
+              <td><span class="badge-yes">&check; Available</span></td>
+              <td>Manual viewer config</td>
+            </tr>
+            <tr>
+              <td><strong>License &amp; Cost</strong></td>
+              <td class="col-tiya"><span class="badge-yes">&check; Free &amp; Open Source</span></td>
+              <td>Monthly Paywall / Limits</td>
+              <td>Free</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 6: Downloads Hub
+       ====================================================================== -->
+  <section class="download-section" id="download">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Releases</span>
+        <h2 class="section-title">Download Tiya for your platform.</h2>
+        <p class="section-desc">Tiya 0.4.0 is available natively for macOS, Windows, and Linux. No separate TeX engine install needed.</p>
+      </div>
+
+      <!-- OS Tab Switcher -->
+      <div class="os-tab-nav">
+        <button class="tab-btn active" data-os="all">All Operating Systems</button>
+        <button class="tab-btn" data-os="mac">macOS</button>
+        <button class="tab-btn" data-os="win">Windows</button>
+        <button class="tab-btn" data-os="linux">Linux</button>
+      </div>
+
+      <!-- Download Cards Grid -->
+      <div class="os-download-grid">
+        <!-- macOS Card -->
+        <div class="os-download-card" data-os="mac">
+          <div class="card-top">
+            <span class="os-tag">Apple Silicon</span>
+            <svg viewBox="0 0 384 512" width="22" height="22" fill="currentColor">
+              <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.59c0 62.6 24 121 57.7 166.5 17 22.7 36 46.9 59.5 46.4 23.7-.4 32.6-17.3 61.1-17.3 27.8 0 36 17.3 60.6 17.3 24.5-.5 41.9-22 58.4-45.4 17.7-25.3 25.2-49.7 26.1-51.6-59.8-31-68.7-115.2-69.1-120.8zM242.5 100.9c13.7-21.2 21.8-42.3 17-62.8-19.4 1.5-44 12.6-61 37.8-13.8 21.2-23.5 46.1-17.6 65.8 22.7 1.2 46.9-16.7 61.6-40.8zm0 0"/>
+            </svg>
+          </div>
+          <h3>macOS</h3>
+          <p class="os-card-desc">Native ARM64 build for M1/M2/M3/M4 Macs. macOS 11 Big Sur or newer.</p>
+          
+          <div class="download-btn-stack">
+            <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_aarch64.dmg" class="card-dl-btn primary">
+              <span>Download Disk Image</span>
+              <span class="file-ext">.dmg</span>
+            </a>
+            <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_aarch64.app.tar.gz" class="card-dl-btn secondary">
+              <span>Portable Archive</span>
+              <span class="file-ext">.tar.gz</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Windows Card -->
+        <div class="os-download-card" data-os="win">
+          <div class="card-top">
+            <span class="os-tag">64-bit x64</span>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M3 12V6.75L9 5.43V11.91L3 12ZM20 4.12L10 5.33V11.86L20 12V4.12ZM3 13L9 13.09V19.9L3 18.75V13ZM20 13.1V20.78L10 19.98V13.15L20 13.1Z"/>
+            </svg>
+          </div>
+          <h3>Windows</h3>
+          <p class="os-card-desc">Standard installer &amp; enterprise MSI for Windows 10 &amp; Windows 11.</p>
+
+          <div class="download-btn-stack">
+            <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_x64-setup.exe" class="card-dl-btn primary">
+              <span>Download Setup</span>
+              <span class="file-ext">.exe</span>
+            </a>
+            <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_x64_en-US.msi" class="card-dl-btn secondary">
+              <span>Windows Installer</span>
+              <span class="file-ext">.msi</span>
+            </a>
+          </div>
+        </div>
+
+        <!-- Linux Card -->
+        <div class="os-download-card" data-os="linux">
+          <div class="card-top">
+            <span class="os-tag">x86_64</span>
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M20.06 12.32a7.13 7.13 0 0 0-3.31-2.13c.44-1 .93-1.8 1.58-2.47c2-2.18 1.53-4.06.9-5.31c-.69-1.41-2.13-2.31-3.84-2.37a7.57 7.57 0 0 0-3.06.75a6.88 6.88 0 0 0-3.09-.75c-1.69.06-3.13 1-3.81 2.37c-.63 1.28-1.06 3.16.91 5.31c.62.66 1.12 1.47 1.56 2.47a7.13 7.13 0 0 0-3.31 2.13c-2 2.4-1.81 5.21-1.34 7.06c.22 1.1.6 2.32 1.59 3.66a8.84 8.84 0 0 0 3.28 2.9c1.82.89 4.23.89 5.63 0a9.42 9.42 0 0 0 3.28-2.9c1-1.35 1.37-2.57 1.59-3.66c.47-1.85.63-4.66-1.4-7.06m-4.84 9.12c-.66.22-1.75.34-3.22.34s-2.56-.12-3.22-.34a7.91 7.91 0 0 1-2.62-2a14.69 14.69 0 0 1-1.31-2.84a5 5 0 0 1-.34-1.44c-.16-1.06-.09-2.63 1.09-4.06a5.78 5.78 0 0 1 2.62-1.72a7.44 7.44 0 0 1-.59-2.06A3.4 3.4 0 0 1 8 6.22c.38-.72.91-1 1.53-1s1.34.38 1.69 1a5.88 5.88 0 0 1 1.06 2.65h.56A5.88 5.88 0 0 1 13.94 6.22c.38-.72.91-1 1.53-1s1.34.38 1.69 1a3.4 3.4 0 0 1 .41 1.09a7.44 7.44 0 0 1-.59 2.06a5.78 5.78 0 0 1 2.62 1.72c1.22 1.43 1.25 3 1.09 4.06a5 5 0 0 1-.34 1.44a14.69 14.69 0 0 1-1.31 2.84a7.91 7.91 0 0 1-2.62 2M9.87 15a1.66 1.66 0 1 1 1.66-1.66A1.66 1.66 0 0 1 9.87 15m5.82-1.66a1.66 1.66 0 1 1-1.66 1.66a1.66 1.66 0 0 1 1.66-1.66z"/>
+            </svg>
+          </div>
+          <h3>Linux</h3>
+          <p class="os-card-desc">Debian/Ubuntu, Fedora/RHEL, and universal portable AppImage.</p>
+
+          <div class="download-btn-stack">
+            <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_amd64.deb" class="card-dl-btn primary">
+              <span>Debian / Ubuntu</span>
+              <span class="file-ext">.deb</span>
+            </a>
+            <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya_0.4.0_amd64.AppImage" class="card-dl-btn secondary">
+              <span>Universal Portable</span>
+              <span class="file-ext">.AppImage</span>
+            </a>
+            <a href="https://github.com/saqib40/tiya/releases/download/v0.4.0/tiya-0.4.0-1.x86_64.rpm" class="card-dl-btn secondary">
+              <span>Fedora / RHEL</span>
+              <span class="file-ext">.rpm</span>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- macOS Gatekeeper Quarantine Command Helper -->
+      <div class="gatekeeper-card">
+        <div class="gatekeeper-icon">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+        </div>
+        <div class="gatekeeper-content" style="flex: 1;">
+          <h4>macOS Security Notice (Un-notarized Build)</h4>
+          <p>
+            Because Tiya is currently free and open source without an Apple Developer certificate, macOS Gatekeeper may show a &ldquo;Tiya is damaged and can't be opened&rdquo; warning. You can clear this attribute with a single terminal command:
+          </p>
+          <div class="terminal-copy-box">
+            <code id="mac-code-block">xattr -cr /Applications/Tiya.app</code>
+            <button class="copy-snippet-btn" id="copy-mac-btn" title="Copy command to clipboard">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+              </svg>
+              <span>Copy</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 7: Contribute & Developer Hub
+       ====================================================================== -->
+  <section class="contribute-section" id="contribute">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">Open Source</span>
+        <h2 class="section-title">Built in the open with modern systems tech.</h2>
+        <p class="section-desc">Contribute features, report issues, or inspect the codebase on GitHub.</p>
+      </div>
+
+      <div class="contribute-code-card">
+        <div class="code-card-header">
+          <div class="traffic-lights">
+            <span class="light-dot red"></span>
+            <span class="light-dot yellow"></span>
+            <span class="light-dot green"></span>
+          </div>
+          <span class="code-title">Terminal &mdash; Local Development Setup</span>
+          <button class="copy-snippet-btn" id="copy-git-btn" title="Copy git clone commands">
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+            </svg>
+            <span>Copy</span>
+          </button>
+        </div>
+
+        <div class="code-content">
+          <pre id="git-clone-block">git clone https://github.com/saqib40/tiya.git
 cd tiya
 npm install
-npm run tauri dev</code></pre>
-            </div>
-            <p class="branch-note">Development happens on the <code>main</code> branch.</p>
+npm run tauri dev</pre>
         </div>
-    </section>
+      </div>
+
+      <!-- Tech Stack Pills -->
+      <div class="tech-badges-row">
+        <span class="tech-pill">Tauri 2</span>
+        <span class="tech-pill">Rust Stable</span>
+        <span class="tech-pill">React 19</span>
+        <span class="tech-pill">Monaco Editor</span>
+        <span class="tech-pill">Tectonic Engine</span>
+        <span class="tech-pill">SyncTeX</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       SECTION 8: Footer
+       ====================================================================== -->
+  <footer class="main-footer">
+    <div class="container footer-container">
+      <div class="footer-left">
+        <a href="#" class="brand-mark">
+          Tiya<span class="dot">.</span>
+        </a>
+        <span class="footer-copyright">&copy; 2026 Saqib Hussain &bull; Released under the MIT License.</span>
+      </div>
+
+      <div class="footer-links">
+        <a href="https://github.com/saqib40/tiya" target="_blank" rel="noopener noreferrer" class="footer-link">GitHub Repository</a>
+        <a href="https://github.com/saqib40/tiya/releases" target="_blank" rel="noopener noreferrer" class="footer-link">All Releases</a>
+        <a href="https://github.com/saqib40/tiya/issues" target="_blank" rel="noopener noreferrer" class="footer-link">Report Issue</a>
+        <a href="#" class="footer-link">&uarr; Back to Top</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script -->
+  <script src="script.js"></script>
 </body>
 </html>
