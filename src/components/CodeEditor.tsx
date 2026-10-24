@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
+import type { editor as MonacoEditor, Position } from 'monaco-editor';
 import { Loader2, ListTree, Save } from 'lucide-react';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { EditorLocation } from '../lib/diagnostics';
