@@ -32,7 +32,7 @@ vi.mock("@monaco-editor/react", async () => {
         default: function MockEditor({ beforeMount, onMount, path, keepCurrentModel, saveViewState }: { beforeMount: (monaco: unknown) => void; onMount: (instance: unknown, monaco: unknown) => void; path: string; keepCurrentModel: boolean; saveViewState: boolean }) {
             useEffect(() => {
                 const monaco = {
-                    KeyMod: { CtrlCmd: 2048 }, KeyCode: { KeyV: 52, KeyS: 49 }, editor: { getModel: vi.fn() }, Uri: { parse: (path: string) => path },
+                    KeyMod: { CtrlCmd: 2048, Alt: 512 }, KeyCode: { KeyV: 52, KeyS: 49, KeyJ: 40 }, editor: { getModel: vi.fn() }, Uri: { parse: (path: string) => path },
                     languages: {
                         register: vi.fn(), setMonarchTokensProvider: vi.fn(), setLanguageConfiguration: vi.fn(), CompletionItemKind: { Reference: 17 },
                         registerCompletionItemProvider: vi.fn((_language, provider) => { completionProviders.push(provider); return { dispose: vi.fn() }; }),
@@ -107,7 +107,7 @@ describe("editor save shortcut", () => {
     it('uses the current editor line for forward PDF navigation', () => {
         const onForwardSync = vi.fn();
         render(<CodeEditor code="text" onChange={vi.fn()} onForwardSync={onForwardSync} />);
-        fireEvent.click(screen.getByRole('button', { name: 'Show in PDF' }));
+        act(() => commands.get(2048 | 512 | 40)!());
         expect(onForwardSync).toHaveBeenCalledWith(7);
     });
 

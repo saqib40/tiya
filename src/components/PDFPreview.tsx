@@ -16,8 +16,7 @@ import {
     RefreshCw,
     Search,
     Download,
-    ExternalLink,
-    Crosshair
+    ExternalLink
 } from 'lucide-react';
 
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -56,7 +55,6 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error, locati
     const [searched, setSearched] = useState(false);
     const [actionError, setActionError] = useState<string | null>(null);
     const searchRevision = useRef(0);
-    const [sourceNavigation, setSourceNavigation] = useState(false);
 
     useEffect(() => {
         if (!location || !numPages || location.page > numPages) return;
@@ -278,7 +276,6 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error, locati
                     </div>
                     <button onClick={() => void exportPdf()} title="Export PDF" aria-label="Export PDF" className="p-1 text-slate-300 hover:text-white"><Download size={16} /></button>
                     <button onClick={() => void openPdf()} title="Open PDF externally" aria-label="Open PDF externally" className="p-1 text-slate-300 hover:text-white"><ExternalLink size={16} /></button>
-                    {onSource && <button title="Select source from PDF" aria-label="Select source from PDF" aria-pressed={sourceNavigation} onClick={() => setSourceNavigation(value => !value)} className={`p-1 ${sourceNavigation ? 'text-emerald-300' : 'text-slate-300'}`}><Crosshair size={16} /></button>}
                 </div>
             )}
 
@@ -343,7 +340,7 @@ const PDFPreview = ({ pdfPath, pdfRevision = 0, compiling = false, error, locati
                                 event.stopPropagation();
                                 onSource(pageNumber, (event.clientX - rectangle.left) * size.width / rectangle.width, (event.clientY - rectangle.top) * size.height / rectangle.height);
                             };
-                            return <div key={pageNumber} data-page={pageNumber} ref={node => { if (node) pageNodes.current.set(pageNumber, node); else pageNodes.current.delete(pageNumber); }} className="pdf-canvas relative shrink-0 bg-white" style={{ width, height: width * size.height / size.width, cursor: sourceNavigation ? 'crosshair' : undefined }} onClick={event => { if (sourceNavigation) showSource(event); }} onDoubleClick={event => { if (!sourceNavigation) showSource(event); }}>
+                            return <div key={pageNumber} data-page={pageNumber} ref={node => { if (node) pageNodes.current.set(pageNumber, node); else pageNodes.current.delete(pageNumber); }} className="pdf-canvas relative shrink-0 bg-white" style={{ width, height: width * size.height / size.width }} onClick={event => { if (event.metaKey || event.ctrlKey) showSource(event); }} onDoubleClick={event => { showSource(event); }}>
                                 {Math.abs(pageNumber - currentPage) <= 2 && <Page
                                     pageNumber={pageNumber}
                                     width={width}

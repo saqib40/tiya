@@ -1,7 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import Editor, { OnMount, BeforeMount } from '@monaco-editor/react';
-import type { editor as MonacoEditor, Position } from 'monaco-editor';
-import { Loader2, Crosshair, ListTree, Save } from 'lucide-react';
+import { Loader2, ListTree, Save } from 'lucide-react';
 import { readText } from '@tauri-apps/plugin-clipboard-manager';
 import { EditorLocation } from '../lib/diagnostics';
 import { latexCompletionContext, latexOutline } from '../lib/latex';
@@ -26,6 +25,8 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
     const monacoRef = useRef<Parameters<OnMount>[1] | null>(null);
     const modelPaths = useRef(new Set<string>());
     const onSaveRef = useRef(onSave);
+    const onForwardSyncRef = useRef(onForwardSync);
+    useEffect(() => { onForwardSyncRef.current = onForwardSync; }, [onForwardSync]);
     const [isPasting, setIsPasting] = useState(false);
     const [pasteError, setPasteError] = useState<string | null>(null);
     const [outlineOpen, setOutlineOpen] = useState(false);
@@ -192,6 +193,12 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
         editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
             onSaveRef.current?.();
         });
+
+        // Forward SyncTeX Command (Ctrl/Cmd + Alt + J)
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Alt | monaco.KeyCode.KeyJ, () => {
+            const position = editor.getPosition();
+            if (position) onForwardSyncRef.current?.(position.lineNumber);
+        });
     };
 
     return (
@@ -199,7 +206,6 @@ const CodeEditor = ({ code, onChange, onSave, onForwardSync, location, path = "u
             <div className="relative flex shrink-0 items-center justify-end gap-2 border-b border-slate-800 px-3 py-1 text-slate-400">
                 <button title="Document outline" aria-label="Document outline" aria-expanded={outlineOpen} disabled={outline.length === 0} onClick={() => setOutlineOpen(value => !value)} className="p-1 disabled:opacity-30"><ListTree size={15} /></button>
                 <button title="Save source" aria-label="Save source" disabled={!onSave} onClick={onSave} className="p-1 disabled:opacity-30"><Save size={15} /></button>
-                <button title="Show in PDF" aria-label="Show in PDF" disabled={!onForwardSync} onClick={() => { const position = editorRef.current?.getPosition(); if (position) onForwardSync?.(position.lineNumber); }} className="p-1 disabled:opacity-30"><Crosshair size={15} /></button>
                 {outlineOpen && <div role="menu" aria-label="Document outline" className="absolute right-3 top-8 z-40 max-h-80 w-72 overflow-auto rounded border border-slate-700 bg-slate-900 py-1 text-xs shadow-xl">
                     {outline.map(item => <button key={`${item.line}-${item.title}`} role="menuitem" onClick={() => { revealLocation({ line: item.line, column: 1, revision: item.line }); setOutlineOpen(false); }} className="block w-full truncate px-3 py-1.5 text-left text-slate-200 hover:bg-slate-800" style={{ paddingLeft: `${12 + (item.level - 1) * 12}px` }} title={item.title}>
                         {item.title}

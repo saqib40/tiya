@@ -218,14 +218,14 @@ function App() {
 
     const showInPdf = (line: number) => {
         const target = forwardSync(sync.boxes, filePath, line);
-        if (!target) { setProjectError(sync.error || 'No matching position in the last successful PDF'); return; }
+        if (!target) return;
         setPdfLocation(previous => ({ ...target, revision: (previous?.revision || 0) + 1 }));
         setProjectError(null);
     };
 
     const showSource = (page: number, left: number, top: number) => {
         const target = inverseSync(sync.boxes, page, left, top);
-        if (!target) { setProjectError(sync.error || 'No source position was found for this PDF location'); return; }
+        if (!target) return;
         void handleDiagnostic({ file: target.file, line: target.line, column: 1, message: '', severity: 'warning' });
     };
 
