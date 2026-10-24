@@ -709,20 +709,20 @@ function setupOSDetection() {
   const osConfig = {
     mac: {
       name: 'macOS (Apple Silicon)',
-      file: 'tiya_0.4.2_aarch64.dmg',
-      url: 'https://github.com/saqib40/tiya/releases/download/v0.4.2/tiya_0.4.2_aarch64.dmg',
+      file: 'tiya_0.4.3_aarch64.dmg',
+      url: 'https://github.com/saqib40/tiya/releases/download/v0.4.3/tiya_0.4.3_aarch64.dmg',
       icon: `<svg viewBox="0 0 384 512" width="18" height="18" fill="currentColor"><path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.59c0 62.6 24 121 57.7 166.5 17 22.7 36 46.9 59.5 46.4 23.7-.4 32.6-17.3 61.1-17.3 27.8 0 36 17.3 60.6 17.3 24.5-.5 41.9-22 58.4-45.4 17.7-25.3 25.2-49.7 26.1-51.6-59.8-31-68.7-115.2-69.1-120.8zM242.5 100.9c13.7-21.2 21.8-42.3 17-62.8-19.4 1.5-44 12.6-61 37.8-13.8 21.2-23.5 46.1-17.6 65.8 22.7 1.2 46.9-16.7 61.6-40.8zm0 0"/></svg>`
     },
     win: {
       name: 'Windows (x64)',
-      file: 'tiya_0.4.2_x64-setup.exe',
-      url: 'https://github.com/saqib40/tiya/releases/download/v0.4.2/tiya_0.4.2_x64-setup.exe',
+      file: 'tiya_0.4.3_x64-setup.exe',
+      url: 'https://github.com/saqib40/tiya/releases/download/v0.4.3/tiya_0.4.3_x64-setup.exe',
       icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M3 12V6.75L9 5.43V11.91L3 12ZM20 4.12L10 5.33V11.86L20 12V4.12ZM3 13L9 13.09V19.9L3 18.75V13ZM20 13.1V20.78L10 19.98V13.15L20 13.1Z"/></svg>`
     },
     linux: {
       name: 'Linux (.deb / AppImage)',
-      file: 'tiya_0.4.2_amd64.deb',
-      url: 'https://github.com/saqib40/tiya/releases/download/v0.4.2/tiya_0.4.2_amd64.deb',
+      file: 'tiya_0.4.3_amd64.deb',
+      url: 'https://github.com/saqib40/tiya/releases/download/v0.4.3/tiya_0.4.3_amd64.deb',
       icon: `<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M20.06 12.32a7.13 7.13 0 0 0-3.31-2.13c.44-1 .93-1.8 1.58-2.47c2-2.18 1.53-4.06.9-5.31c-.69-1.41-2.13-2.31-3.84-2.37a7.57 7.57 0 0 0-3.06.75a6.88 6.88 0 0 0-3.09-.75c-1.69.06-3.13 1-3.81 2.37c-.63 1.28-1.06 3.16.91 5.31c.62.66 1.12 1.47 1.56 2.47a7.13 7.13 0 0 0-3.31 2.13c-2 2.4-1.81 5.21-1.34 7.06c.22 1.1.6 2.32 1.59 3.66a8.84 8.84 0 0 0 3.28 2.9c1.82.89 4.23.89 5.63 0a9.42 9.42 0 0 0 3.28-2.9c1-1.35 1.37-2.57 1.59-3.66c.47-1.85.63-4.66-1.4-7.06m-4.84 9.12c-.66.22-1.75.34-3.22.34s-2.56-.12-3.22-.34a7.91 7.91 0 0 1-2.62-2a14.69 14.69 0 0 1-1.31-2.84a5 5 0 0 1-.34-1.44c-.16-1.06-.09-2.63 1.09-4.06a5.78 5.78 0 0 1 2.62-1.72a7.44 7.44 0 0 1-.59-2.06A3.4 3.4 0 0 1 8 6.22c.38-.72.91-1 1.53-1s1.34.38 1.69 1a5.88 5.88 0 0 1 1.06 2.65h.56A5.88 5.88 0 0 1 13.94 6.22c.38-.72.91-1 1.53-1s1.34.38 1.69 1a3.4 3.4 0 0 1 .41 1.09a7.44 7.44 0 0 1-.59 2.06a5.78 5.78 0 0 1 2.62 1.72c1.22 1.43 1.25 3 1.09 4.06a5 5 0 0 1-.34 1.44a14.69 14.69 0 0 1-1.31 2.84a7.91 7.91 0 0 1-2.62 2M9.87 15a1.66 1.66 0 1 1 1.66-1.66A1.66 1.66 0 0 1 9.87 15m5.82-1.66a1.66 1.66 0 1 1-1.66 1.66a1.66 1.66 0 0 1 1.66-1.66z"/></svg>`
     }
   };
@@ -736,7 +736,7 @@ function setupOSDetection() {
       <span class="btn-icon">${current.icon}</span>
       <span class="btn-text">
         <span class="btn-subtext">Download for ${current.name}</span>
-        <span class="btn-maintext">Get Tiya v0.4.2</span>
+        <span class="btn-maintext">Get Tiya v0.4.3</span>
       </span>
       <span class="btn-badge">~80 MB</span>
     `;
